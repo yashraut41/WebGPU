@@ -31,8 +31,9 @@ let render_pipeline = null;
 let buffer_mvpUniform = null;
 let bindingGroup_mvpUniform = null;
 let perspectiveProjectionMatrix = null;
+let depthTexture = null;
 
-var angle_triangle = 0.0;
+var angle_pyramid = 0.0;
 //how to start animation: to have requestAnimationFrame() to be called "crossbrowser" compatible
 var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame;
 
@@ -125,6 +126,7 @@ function onDeviceLost(info) {
     buffer_mvpUniform = null;
     bindingGroup_mvpUniform = null;
     perspectiveProjectionMatrix = null;
+    depthTexture = null;
 }
 
 function toggleFullScreen() {
@@ -272,24 +274,48 @@ function initialize() {
 
 
     // 3.Declare postion array.
-    const vertex_position = new Float32Array([
-        0.0, 1.0, 0.0, 1.0,   //apex
-        -1.0, -1.0, 0.0, 1.0,   //left bottom
-        1.0, -1.0, 0.0, 1.0    //right bottom
+    const pyramid_position = new Float32Array([
+        0.0, 1.0, 0.0, 1.0, // missing apex
+        -1.0, -1.0, 1.0, 1.0,
+        1.0, -1.0, 1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        1.0, -1.0, 1.0, 1.0,
+        1.0, -1.0, -1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        1.0, -1.0, -1.0, 1.0,
+        -1.0, -1.0, -1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        -1.0, -1.0, -1.0, 1.0,
+        -1.0, -1.0, 1.0, 1.0,
     ]);
 
 
-    const vertex_color = new Float32Array([
-        1.0, 0.0, 0.0, 1.0,   //red
-        0.0, 1.0, 0.0, 1.0,   //green
-        0.0, 0.0, 1.0, 1.0    //blue
+    const pyramid_color = new Float32Array([
+        0.5, 1.0, 0.0, 1.0, // matching apex color
+        0.0, 0.0, 1.0, 1.0,
+        1.0, 0.0, 0.0, 1.0,
+
+        0.5, 1.0, 1.0, 1.0,
+        1.0, 0.0, 1.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+
+        0.5, 1.0, 0.0, 1.0,
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+
+        0.5, 1.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+        1.0, 0.0, 0.0, 1.0,
     ]);
 
     // 4.Create vertex buffer for postion. GPUBufferDescriptor
     // A. Create buffer descriptor
     const bufferDescriptor_position =
     {
-        size: vertex_position.byteLength,
+        size: pyramid_position.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     };
 
@@ -308,7 +334,7 @@ function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
+    queue.writeBuffer(buffer_position, 0, pyramid_position, 0, pyramid_position.length);
 
     console.log("Writing Vertex position data  into position buffer is completed \n");
 
@@ -319,7 +345,7 @@ function initialize() {
     // A. Create buffer descriptor
     const bufferDescriptor_colors =
     {
-        size: vertex_color.byteLength,
+        size: pyramid_color.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     };
 
@@ -338,13 +364,13 @@ function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_color, 0, vertex_color, 0, vertex_color.length);
+    queue.writeBuffer(buffer_color, 0, pyramid_color, 0, pyramid_color.length);
 
     console.log("Writing Vertex COLOR data  into color buffer is completed \n");
 
 
 
-    //postion bufffer is buffer_position and we have written position data i.e vertex_position into it.  
+    //postion bufffer is buffer_position and we have written position data i.e pyramid_position into it.  
 
     // 5.Now will do uniform plumbing for MVP Uniform
     // 5-> A. Uniforms will bind  to bind group in shader so create bind  group layout  for  our MVP  uniform
@@ -510,12 +536,22 @@ function initialize() {
         topology: "triangle-list", // this means that the vertices will be interpreted as a list of triangles
     };
 
+    //depth stencil state
+    const depthStencilState = {
+        depthWriteEnabled: true, // this means that the depth buffer will be written to
+        depthCompare: "less-equal", // this means that a fragment will pass the depth test if its depth is less than or equal to the current depth buffer value.
+        format: "depth24plus-stencil8", // without stencil we can use "depth24plus" 
+        //we are using "depth24plus-stencil8" because we may go for shadow mapping, deffeered rendering, decal rendering.
+    };
+
+
     //e.  Finally  create the render pipeline  descriptor PSO (GPURenderPipelineDescriptor)
     const pipelineDescriptor = {
         layout: pipelineLayout, // this is the pipeline layout that we created earlier
         vertex: vertexShadeState, // this is the vertex shader state that we created earlier
         fragment: fragentShaderState, // this is the fragment shader state that we created earlier
         primitive: primitiveState, // this is the primitive state that we created earlier
+        depthStencil: depthStencilState,
     };
 
     // B. Create render pipeline. GPURenderPipeline
@@ -551,6 +587,29 @@ function resize() {
     else {
         canvas.width = canvas_original_width;
         canvas.height = canvas_original_height;
+    }
+
+    // Create depth texture for depth testing
+
+    if (device != null) {
+        if (depthTexture != null) {
+            depthTexture.destroy();
+            depthTexture = null;
+        }
+        // to create depth texture we need to create GPUTextureDescriptor
+        const depthTextureDescriptor = {
+            size: [canvas.width, canvas.height, 1],
+            dimension: "2d",
+            format: "depth24plus-stencil8",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        };
+
+        // now create depth texture using above depth texture descriptor. GPUTexture
+        depthTexture = device.createTexture(depthTextureDescriptor);
+        if (depthTexture == null) {
+            console.log("Failed to create depth Texture \n");
+            throw Error("Failed to create  depth Texture  \n");
+        }
     }
     // /Initialze projection matrix
     mat4.perspective(perspectiveProjectionMatrix,
@@ -589,8 +648,20 @@ function display() {
         storeOp: 'store'
     };
 
+    // Now  create render pass depth attachement 
+    const renderPassDepthAttachment = {
+        view: depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: "clear",
+        depthStoreOp: "store",
+        stencilClearValue: 0,
+        stencilLoadOp: "clear",
+        stencilStoreOp: "store",
+    }
+
     const renderPassDescriptor = {
-        colorAttachments: [renderPassColorAttachment]
+        colorAttachments: [renderPassColorAttachment],
+        depthStencilAttachment: renderPassDepthAttachment,
     };
 
     // Added in 02-Perspective_Triangle
@@ -602,7 +673,7 @@ function display() {
     //B.  Do  needed  transformations here  we do  only translation.
     // first param is target matrix, second param is source matrix, third param is translation vector
     mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -4.0]); //translate the modelview matrix by -4 units in z direction
-    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_triangle)); //
+    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_pyramid)); //
     //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
     mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelViewMatrix);
 
@@ -660,7 +731,7 @@ function display() {
 
     //4. Draw the triangle
     // 1. first parameter is the number of vertices to draw
-    renderPassEncoder.draw(3);
+    renderPassEncoder.draw(12);
 
     //end the render pass
     renderPassEncoder.end();
@@ -680,9 +751,9 @@ function display() {
 
 function update() {
     //code
-    angle_triangle = angle_triangle + 1.0;
-    if (angle_triangle >= 360.0) {
-        angle_triangle = 0.0;
+    angle_pyramid = angle_pyramid + 1.0;
+    if (angle_pyramid >= 360.0) {
+        angle_pyramid = 0.0;
     }
 }
 
@@ -692,6 +763,12 @@ function uninitialize() {
     if (animationFrameId != null) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
+    }
+
+    //destroy depth texure
+    if (depthTexture != null) {
+        depthTexture.destroy();
+        depthTexture = null;
     }
 
     if (context != null) {

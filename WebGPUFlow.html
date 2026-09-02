@@ -1,0 +1,1020 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Mental Model — The Graphics Factory</title>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: #121a2f;
+            --panel2: #18223b;
+            --text: #e8edf7;
+            --muted: #9ba8c2;
+            --line: #33415f;
+            --accent: #65d8ff;
+            --green: #70e39b;
+            --orange: #ffb86b;
+            --pink: #ff7eb6;
+            --yellow: #f6df72;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #162448 0, #0b1020 42%, #080c18 100%);
+            color: var(--text);
+            line-height: 1.55;
+        }
+
+        .wrap {
+            max-width: 1250px;
+            margin: auto;
+            padding: 28px
+        }
+
+        h1 {
+            font-size: 38px;
+            margin: 0 0 8px
+        }
+
+        h2 {
+            margin: 0 0 14px;
+            font-size: 25px
+        }
+
+        h3 {
+            margin: 0 0 8px;
+            font-size: 18px
+        }
+
+        p {
+            margin: 8px 0;
+            color: #c8d0df
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 17px
+        }
+
+        .hero,
+        .panel {
+            background: rgba(18, 26, 47, .88);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 16px 50px rgba(0, 0, 0, .25);
+        }
+
+        .hero {
+            margin-bottom: 20px
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin-top: 18px
+        }
+
+        .pill {
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            color: #dce4f4;
+            font-size: 13px;
+            background: #10182b
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 18px
+        }
+
+        .full {
+            grid-column: 1/-1
+        }
+
+        .analogy {
+            display: grid;
+            grid-template-columns: 1fr 70px 1fr;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .box {
+            background: var(--panel2);
+            border: 1px solid #3a496b;
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .arrow {
+            text-align: center;
+            color: var(--accent);
+            font-size: 27px
+        }
+
+        .label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em
+        }
+
+        .big {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 4px 0
+        }
+
+        .code {
+            background: #080d18;
+            border: 1px solid #26334f;
+            border-radius: 10px;
+            padding: 13px;
+            overflow: auto;
+            color: #dce8ff;
+            font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+            white-space: pre;
+        }
+
+        .note {
+            border-left: 4px solid var(--accent);
+            padding: 11px 14px;
+            background: #0e1729;
+            border-radius: 8px;
+            margin-top: 13px
+        }
+
+        .warn {
+            border-left-color: var(--orange)
+        }
+
+        .good {
+            border-left-color: var(--green)
+        }
+
+        .pink {
+            border-left-color: var(--pink)
+        }
+
+        .flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 18px 0 4px
+        }
+
+        .node {
+            background: #17213a;
+            border: 1px solid #405075;
+            border-radius: 12px;
+            padding: 11px 13px;
+            min-width: 120px;
+            text-align: center
+        }
+
+        .node small {
+            display: block;
+            color: var(--muted);
+            font-size: 11px
+        }
+
+        .arr {
+            color: var(--accent);
+            font-size: 21px
+        }
+
+        .two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #293651;
+            text-align: left;
+            padding: 10px;
+            vertical-align: top
+        }
+
+        th {
+            color: #dce5f6;
+            background: #10182b
+        }
+
+        td {
+            color: #c5cfdf
+        }
+
+        .section {
+            margin-top: 20px
+        }
+
+        .interactive {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            align-items: stretch
+        }
+
+        .triangle-stage {
+            min-height: 320px;
+            border-radius: 16px;
+            border: 1px solid #3b4a6b;
+            background: #070c17;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 320px
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0
+        }
+
+        button {
+            border: 1px solid #405075;
+            background: #17213a;
+            color: #e7edf9;
+            border-radius: 9px;
+            padding: 9px 12px;
+            cursor: pointer
+        }
+
+        button:hover {
+            background: #202d4b
+        }
+
+        .selected {
+            outline: 2px solid var(--accent)
+        }
+
+        .step {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            gap: 12px;
+            margin: 14px 0
+        }
+
+        .num {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #18314a;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-weight: 800
+        }
+
+        .mini {
+            font-size: 13px;
+            color: var(--muted)
+        }
+
+        .footer {
+            margin: 24px 0 5px;
+            text-align: center;
+            color: #7f8da8;
+            font-size: 13px
+        }
+
+        @media(max-width:850px) {
+
+            .grid,
+            .interactive,
+            .two {
+                grid-template-columns: 1fr
+            }
+
+            .analogy {
+                grid-template-columns: 1fr
+            }
+
+            .arrow {
+                transform: rotate(90deg)
+            }
+
+            h1 {
+                font-size: 30px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+
+        <section class="hero">
+            <div class="label">WebGPU learning map</div>
+            <h1>The Graphics Factory Analogy</h1>
+            <p class="subtitle">
+                A systematic mental model for the Blue Screen → Triangle → Perspective Triangle → Colored Triangle
+                programs.
+                The goal is not to memorize APIs. The goal is to understand <b>who owns what, why it exists, and how
+                    data moves</b>.
+            </p>
+            <div class="legend">
+                <span class="pill">🏭 Device = Factory</span>
+                <span class="pill">📐 Layout = Blueprint</span>
+                <span class="pill">📦 Buffer = Storage</span>
+                <span class="pill">🧾 BindGroup = Filled resource package</span>
+                <span class="pill">⚙️ Pipeline = Production recipe</span>
+                <span class="pill">📝 CommandEncoder = Order writer</span>
+                <span class="pill">🚚 Queue = Delivery lane</span>
+                <span class="pill">🎨 Shader = GPU worker</span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>1. The whole picture first</h2>
+            <p>Think of WebGPU as a graphics factory. JavaScript does not directly draw pixels. It prepares resources,
+                creates a production recipe, records an order, and submits that order to the GPU.</p>
+            <div class="flow">
+                <div class="node">navigator.gpu<small>Find GPU capability</small></div>
+                <div class="arr">→</div>
+                <div class="node">GPUAdapter<small>Available hardware choice</small></div>
+                <div class="arr">→</div>
+                <div class="node">GPUDevice<small>Working factory interface</small></div>
+                <div class="arr">→</div>
+                <div class="node">Resources<small>Buffers / shaders / pipeline</small></div>
+                <div class="arr">→</div>
+                <div class="node">CommandBuffer<small>Finished work order</small></div>
+                <div class="arr">→</div>
+                <div class="node">Queue.submit()<small>Send to GPU</small></div>
+                <div class="arr">→</div>
+                <div class="node">Canvas<small>Final image</small></div>
+            </div>
+        </section>
+
+        <div class="grid">
+            <section class="panel">
+                <h2>2. Adapter vs Device</h2>
+                <div class="analogy">
+                    <div class="box">
+                        <div class="label">Real-world</div>
+                        <div class="big">Factory / hardware selection</div>
+                        <p>An adapter represents an available graphics capability you can choose from.</p>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="box">
+                        <div class="label">WebGPU</div>
+                        <div class="big">GPUAdapter → GPUDevice</div>
+                        <p>The device is the working interface through which your program creates GPU resources and
+                            work.</p>
+                    </div>
+                </div>
+                <div class="code">const gpu = navigator.gpu;
+                    const adapter = await gpu.requestAdapter();
+                    device = await adapter.requestDevice();</div>
+                <div class="note good"><b>Mental shortcut:</b> Adapter = “what can I use?” Device = “give me the
+                    interface I will actually use.”</div>
+            </section>
+
+            <section class="panel">
+                <h2>3. Queue</h2>
+                <div class="analogy">
+                    <div class="box">
+                        <div class="label">Real-world</div>
+                        <div class="big">Delivery lane</div>
+                        <p>Your finished production order goes onto the delivery lane.</p>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="box">
+                        <div class="label">WebGPU</div>
+                        <div class="big">GPUQueue</div>
+                        <p>The queue receives finished command buffers for GPU execution.</p>
+                    </div>
+                </div>
+                <div class="code">const commandBuffer = commandEncoder.finish();
+                    queue.submit([commandBuffer]);</div>
+                <div class="note"><b>Important:</b> Queue is not where you build the commands. You build them with a
+                    CommandEncoder and submit the finished CommandBuffer.</div>
+            </section>
+
+            <section class="panel full">
+                <h2>4. Resources: storage and instructions</h2>
+                <div class="two">
+                    <div class="box">
+                        <h3>📦 GPUBuffer = factory storage</h3>
+                        <p>A GPUBuffer is GPU-side storage. In your programs it holds vertex data or uniform data.</p>
+                        <div class="code">buffer_position = device.createBuffer(...);
+                            queue.writeBuffer(buffer_position, ...);
+
+                            buffer_mvpUniform = device.createBuffer(...);</div>
+                    </div>
+                    <div class="box">
+                        <h3>🎨 GPUShaderModule = worker instructions</h3>
+                        <p>A shader module contains WGSL instructions that describe what GPU shader workers do.</p>
+                        <div class="code">const shaderModule_vertexShader =
+                            device.createShaderModule({
+                            code: vertexShaderSourceCode
+                            });</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>5. BindGroupLayout vs BindGroup — the key analogy</h2>
+                <div class="analogy">
+                    <div class="box">
+                        <div class="label">Blueprint</div>
+                        <div class="big">BindGroupLayout</div>
+                        <p>Defines what must exist in each binding slot: type, binding number, and shader visibility.
+                        </p>
+                        <div class="code">binding: 0,
+                            visibility: GPUShaderStage.VERTEX,
+                            buffer: { type: "uniform" }</div>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="box">
+                        <div class="label">Actual package</div>
+                        <div class="big">BindGroup</div>
+                        <p>Fills that blueprint with an actual resource, such as your MVP uniform buffer.</p>
+                        <div class="code">binding: 0,
+                            resource: {
+                            buffer: buffer_mvpUniform
+                            }</div>
+                    </div>
+                </div>
+                <div class="note pink">
+                    <b>Think hotel:</b> BindGroupLayout says “Room 0 must contain a uniform-buffer resource.”
+                    BindGroup says “Here is the actual room with this actual uniform buffer.”
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>6. Why the shader says @group(0) @binding(0)</h2>
+                <p>The WGSL shader and JavaScript must agree about the resource address.</p>
+                <div class="flow">
+                    <div class="node">WGSL<small>@group(0) @binding(0)</small></div>
+                    <div class="arr">↔</div>
+                    <div class="node">PipelineLayout<small>Group 0 layout</small></div>
+                    <div class="arr">↔</div>
+                    <div class="node">BindGroupLayout<small>Binding 0 = uniform</small></div>
+                    <div class="arr">↔</div>
+                    <div class="node">BindGroup<small>Actual MVP buffer</small></div>
+                    <div class="arr">↔</div>
+                    <div class="node">MVP Uniform<small>Actual matrix data</small></div>
+                </div>
+                <div class="code">@group(0) @binding(0)
+                    var&lt;uniform&gt; mvpUniform : MVPUniform;</div>
+                <p class="mini">This is a resource-binding contract. It is different from vertex-buffer locations.</p>
+            </section>
+
+            <section class="panel full">
+                <h2>7. Pipeline = production recipe</h2>
+                <p>The RenderPipeline packages the rules needed to process your draw call.</p>
+                <div class="flow">
+                    <div class="node">PipelineLayout<small>Resource contract</small></div>
+                    <div class="arr">+</div>
+                    <div class="node">Vertex State<small>Vertex shader + input layout</small></div>
+                    <div class="arr">+</div>
+                    <div class="node">Fragment State<small>Fragment shader + target</small></div>
+                    <div class="arr">+</div>
+                    <div class="node">Primitive State<small>triangle-list, culling...</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">RenderPipeline<small>Complete recipe</small></div>
+                </div>
+                <div class="note warn"><b>Do not confuse:</b> RenderPass is the production session. RenderPipeline is
+                    the recipe/configuration used during that session.</div>
+            </section>
+
+            <section class="panel full">
+                <h2>8. Vertex data: the colored triangle</h2>
+                <p>In the colored-triangle program, each vertex carries two attributes: position and color.</p>
+                <div class="two">
+                    <div class="box">
+                        <h3>Position buffer — slot 0</h3>
+                        <div class="code">setVertexBuffer(0, buffer_position)
+
+                            @location(0) vPos : vec4&lt;f32&gt;</div>
+                        <p>Slot 0 is described as position data.</p>
+                    </div>
+                    <div class="box">
+                        <h3>Color buffer — slot 1</h3>
+                        <div class="code">setVertexBuffer(1, buffer_color)
+
+                            @location(1) col : vec4&lt;f32&gt;</div>
+                        <p>Slot 1 is described as color data.</p>
+                    </div>
+                </div>
+                <div class="note">
+                    <b>Critical distinction:</b> <code>setVertexBuffer()</code> connects vertex attributes.
+                    <code>setBindGroup()</code> connects shader resources such as uniforms.
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>9. The vertex-input contract</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>JavaScript pipeline description</th>
+                            <th>WGSL</th>
+                            <th>Meaning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>shaderLocation: 0</code><br><code>format: "float32x4"</code></td>
+                            <td><code>@location(0) vPos : vec4&lt;f32&gt;</code></td>
+                            <td>Position attribute enters the vertex shader.</td>
+                        </tr>
+                        <tr>
+                            <td><code>shaderLocation: 1</code><br><code>format: "float32x4"</code></td>
+                            <td><code>@location(1) col : vec4&lt;f32&gt;</code></td>
+                            <td>Color attribute enters the vertex shader.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="note good"><b>Analogy:</b> The pipeline is the loading dock specification. “Truck slot 0
+                    must contain four 32-bit floats for position; truck slot 1 must contain four 32-bit floats for
+                    color.”</div>
+            </section>
+
+            <section class="panel full">
+                <h2>10. VertexOutput = the handoff package</h2>
+                <p>This is the part that connects the vertex shader to the fragment shader.</p>
+                <div class="analogy">
+                    <div class="box">
+                        <div class="label">Vertex worker</div>
+                        <div class="big">Produces a package</div>
+                        <div class="code">struct VertexOutput {
+                            @builtin(position)
+                            position : vec4&lt;f32&gt;,
+
+                            @location(0)
+                            color : vec4&lt;f32&gt;
+                            };</div>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="box">
+                        <div class="label">Fragment worker</div>
+                        <div class="big">Receives the package</div>
+                        <div class="code">@fragment
+                            fn main(output: VertexOutput)
+                            -&gt; @location(0) vec4&lt;f32&gt;
+                            {
+                            return output.color;
+                            }</div>
+                    </div>
+                </div>
+                <div class="note">
+                    <b>Very important:</b> the variable name <code>output</code> is arbitrary.
+                    What matters is the interface locations and built-ins. The vertex shader returns a VertexOutput;
+                    the fragment shader receives the corresponding interpolated values.
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>11. The two different kinds of “location”</h2>
+                <div class="two">
+                    <div class="box">
+                        <h3>Input location</h3>
+                        <div class="code">Vertex buffer
+                            ↓
+                            @location(0) vPos
+                            @location(1) col</div>
+                        <p>These describe data entering the <b>vertex shader</b> from vertex buffers.</p>
+                    </div>
+                    <div class="box">
+                        <h3>Inter-stage location</h3>
+                        <div class="code">Vertex shader
+                            ↓
+                            VertexOutput.color
+                            ↓
+                            @location(0)
+                            ↓
+                            Fragment shader</div>
+                        <p>This describes data traveling from <b>vertex shader to fragment shader</b>.</p>
+                    </div>
+                </div>
+                <div class="note warn"><b>Same syntax, different interface:</b> <code>@location(0)</code> in the vertex
+                    input and <code>@location(0)</code> in VertexOutput are not the same binding mechanism.</div>
+            </section>
+
+            <section class="panel full">
+                <h2>12. MVP path vs Color path</h2>
+                <div class="two">
+                    <div class="box">
+                        <h3>📐 MVP / Uniform path</h3>
+                        <div class="flow">
+                            <div class="node">Matrix data</div>
+                            <div class="arr">→</div>
+                            <div class="node">Uniform Buffer</div>
+                            <div class="arr">→</div>
+                            <div class="node">BindGroup</div>
+                            <div class="arr">→</div>
+                            <div class="node">Vertex Shader</div>
+                        </div>
+                        <p>This is a <b>resource binding</b> path.</p>
+                    </div>
+                    <div class="box">
+                        <h3>🎨 Vertex color path</h3>
+                        <div class="flow">
+                            <div class="node">Color Buffer</div>
+                            <div class="arr">→</div>
+                            <div class="node">Vertex Shader</div>
+                            <div class="arr">→</div>
+                            <div class="node">VertexOutput</div>
+                            <div class="arr">→</div>
+                            <div class="node">Fragment Shader</div>
+                        </div>
+                        <p>This is a <b>vertex attribute / inter-stage data</b> path.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>13. The complete colored-triangle journey</h2>
+                <div class="flow">
+                    <div class="node">CPU JavaScript<small>Prepare data</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">GPU Buffers<small>Position + Color + MVP</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">RenderPipeline<small>Recipe</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">RenderPass<small>Execution session</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">draw(3)<small>Start production</small></div>
+                </div>
+
+                <div class="flow">
+                    <div class="node">Position<small>slot 0</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">Vertex Shader<small>MVP transform</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">@builtin(position)<small>Where?</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">Rasterization<small>Which fragments?</small></div>
+                </div>
+
+                <div class="flow">
+                    <div class="node">Color<small>slot 1</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">Vertex Shader<small>copy to output</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">VertexOutput.color<small>inter-stage</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">Fragment Shader<small>return color</small></div>
+                    <div class="arr">→</div>
+                    <div class="node">Canvas<small>Final pixels</small></div>
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>14. The actual display() command sequence</h2>
+                <div class="step">
+                    <div class="num">1</div>
+                    <div><b>Create command encoder</b>
+                        <div class="code">const commandEncoder = device.createCommandEncoder();</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">2</div>
+                    <div><b>Get current canvas texture</b>
+                        <div class="code">context.getCurrentTexture().createView()</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">3</div>
+                    <div><b>Calculate and upload MVP</b>
+                        <div class="code">queue.writeBuffer(buffer_mvpUniform, ...);</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">4</div>
+                    <div><b>Begin render pass</b>
+                        <div class="code">commandEncoder.beginRenderPass(renderPassDescriptor)</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">5</div>
+                    <div><b>Select recipe</b>
+                        <div class="code">renderPassEncoder.setPipeline(render_pipeline);</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">6</div>
+                    <div><b>Attach vertex data</b>
+                        <div class="code">setVertexBuffer(0, buffer_position);
+                            setVertexBuffer(1, buffer_color);</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">7</div>
+                    <div><b>Attach resource package</b>
+                        <div class="code">renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform);</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">8</div>
+                    <div><b>Draw</b>
+                        <div class="code">renderPassEncoder.draw(3);</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="num">9</div>
+                    <div><b>Finish and submit</b>
+                        <div class="code">const commandBuffer = commandEncoder.finish();
+                            queue.submit([commandBuffer]);</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>15. One-sentence meaning of every major object</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Object</th>
+                            <th>Mental model</th>
+                            <th>Why it exists</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GPUAdapter</td>
+                            <td>Available factory/hardware option</td>
+                            <td>Find a usable graphics capability.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUDevice</td>
+                            <td>Factory interface</td>
+                            <td>Create resources and GPU work.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUQueue</td>
+                            <td>Delivery lane</td>
+                            <td>Submit finished command buffers.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUBuffer</td>
+                            <td>Storage container</td>
+                            <td>Hold vertex/uniform data on the GPU.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUShaderModule</td>
+                            <td>Worker instructions</td>
+                            <td>Contain WGSL shader code.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUBindGroupLayout</td>
+                            <td>Resource blueprint</td>
+                            <td>Define required resource slots.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUBindGroup</td>
+                            <td>Filled resource package</td>
+                            <td>Provide actual resources matching the blueprint.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUPipelineLayout</td>
+                            <td>Blueprint collection for the recipe</td>
+                            <td>Tell the pipeline which bind-group layouts it uses.</td>
+                        </tr>
+                        <tr>
+                            <td>GPURenderPipeline</td>
+                            <td>Production recipe</td>
+                            <td>Combine shaders, inputs, primitive rules and layout.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUCommandEncoder</td>
+                            <td>Order writer</td>
+                            <td>Record commands.</td>
+                        </tr>
+                        <tr>
+                            <td>GPURenderPassEncoder</td>
+                            <td>Active production session</td>
+                            <td>Set state and issue draw commands.</td>
+                        </tr>
+                        <tr>
+                            <td>GPUCommandBuffer</td>
+                            <td>Finished work order</td>
+                            <td>Immutable recorded commands ready for submission.</td>
+                        </tr>
+                        <tr>
+                            <td>TextureView</td>
+                            <td>Usable view of the destination surface</td>
+                            <td>Tell the render pass where color is written.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="panel full">
+                <h2>16. Interactive: follow the color</h2>
+                <p>Click a stage to highlight the same data path you just learned.</p>
+                <div class="interactive">
+                    <div class="triangle-stage">
+                        <canvas id="tri"></canvas>
+                    </div>
+                    <div>
+                        <div class="controls">
+                            <button data-stage="cpu">1. CPU data</button>
+                            <button data-stage="vertex">2. Vertex shader</button>
+                            <button data-stage="output">3. VertexOutput</button>
+                            <button data-stage="fragment">4. Fragment shader</button>
+                            <button data-stage="canvas">5. Canvas</button>
+                        </div>
+                        <div id="stageText" class="box">
+                            <h3>CPU data</h3>
+                            <p>Three positions and three colors are uploaded into GPU vertex buffers. The GPU has not
+                                drawn anything yet.</p>
+                        </div>
+                        <div class="note">The real triangle is produced by the GPU pipeline. This small visual is only a
+                            teaching aid for the data journey.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel full">
+                <h2>17. Final mental model</h2>
+                <div class="code">YOU (JavaScript)
+                    │
+                    │ prepare resources + recipe + commands
+                    ▼
+                    ┌──────────────────────────────────────────────┐
+                    │ GPU FACTORY │
+                    │ │
+                    │ Device │
+                    │ │ │
+                    │ ├── Buffers = storage │
+                    │ ├── ShaderModules = worker instructions │
+                    │ ├── BindGroupLayout = resource blueprint │
+                    │ ├── BindGroup = filled resource package │
+                    │ ├── PipelineLayout = layout contract │
+                    │ └── RenderPipeline = production recipe │
+                    │ │
+                    └──────────────────────┬───────────────────────┘
+                    │
+                    CommandBuffer
+                    │
+                    Queue.submit
+                    │
+                    ▼
+                    GPU EXECUTION
+                    │
+                    ┌────────┴────────┐
+                    │ │
+                    Vertex data Uniform data
+                    │ │
+                    └───────┬─────────┘
+                    ▼
+                    Vertex Shader
+                    │
+                    position + color output
+                    │
+                    ▼
+                    Rasterization
+                    │
+                    ▼
+                    Fragment Shader
+                    │
+                    ▼
+                    Canvas Texture
+                    │
+                    ▼
+                    SCREEN</div>
+                <div class="note good"><b>The key idea:</b> WebGPU is largely about making these contracts explicit —
+                    where data lives, what format it has, which shader sees it, which resource slot it occupies, and
+                    which pipeline rules process it.</div>
+            </section>
+        </div>
+
+        <div class="footer">
+            Built from the Blue Screen, Perspective Triangle, and Colored Triangle code you provided.
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("tri");
+        const ctx = canvas.getContext("2d");
+        const stageText = document.getElementById("stageText");
+
+        const stages = {
+            cpu: {
+                title: "CPU data",
+                text: "Three positions and three colors are uploaded into GPU vertex buffers. The GPU has not drawn anything yet."
+            },
+            vertex: {
+                title: "Vertex shader",
+                text: "Each vertex receives position at @location(0) and color at @location(1). The position is transformed by the MVP uniform."
+            },
+            output: {
+                title: "VertexOutput",
+                text: "The vertex shader packages the transformed position as @builtin(position) and the color as @location(0)."
+            },
+            fragment: {
+                title: "Fragment shader",
+                text: "The rasterizer provides interpolated VertexOutput values to the fragment shader, which returns output.color."
+            },
+            canvas: {
+                title: "Canvas",
+                text: "The fragment colors become final pixels in the current canvas texture, producing the colored triangle."
+            }
+        };
+
+        function resizeCanvas() {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const r = canvas.getBoundingClientRect();
+            canvas.width = Math.max(1, Math.floor(r.width * dpr));
+            canvas.height = Math.max(1, Math.floor(r.height * dpr));
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawTriangle("canvas");
+        }
+        function drawTriangle(stage) {
+            const w = canvas.clientWidth, h = canvas.clientHeight;
+            ctx.clearRect(0, 0, w, h);
+
+            // background grid
+            ctx.strokeStyle = "#17223a"; ctx.lineWidth = 1;
+            for (let x = 0; x < w; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+            for (let y = 0; y < h; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+            const p0 = { x: w * .5, y: h * .18 }, p1 = { x: w * .22, y: h * .78 }, p2 = { x: w * .78, y: h * .78 };
+
+            if (stage === "cpu") {
+                drawVertex(p0, "RED"); drawVertex(p1, "GREEN"); drawVertex(p2, "BLUE");
+                label(p0.x + 8, p0.y - 8, "position + color");
+                label(p1.x - 62, p1.y + 25, "position + color");
+                label(p2.x - 5, p2.y + 25, "position + color");
+                return;
+            }
+
+            // triangle
+            const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+            grad.addColorStop(0, "#40e26f"); grad.addColorStop(.5, "#a6d84d"); grad.addColorStop(1, "#477bff");
+            const grad2 = ctx.createLinearGradient(w * .5, h * .18, w * .5, h * .78);
+            grad2.addColorStop(0, "#ff3f73"); grad2.addColorStop(.55, "rgba(255,255,255,0)");
+            grad2.addColorStop(1, "rgba(255,255,255,0)");
+            ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+            ctx.fillStyle = grad2; ctx.fill();
+
+            ctx.strokeStyle = "#dbe8ff"; ctx.lineWidth = 2; ctx.stroke();
+
+            if (stage === "vertex") {
+                label(w * .5 - 55, h * .48, "MVP transform");
+            } else if (stage === "output") {
+                label(w * .5 - 55, h * .48, "VertexOutput");
+            } else if (stage === "fragment") {
+                label(w * .5 - 50, h * .48, "interpolation");
+            } else {
+                label(w * .5 - 38, h * .48, "final pixels");
+            }
+
+            drawVertex(p0, "RED"); drawVertex(p1, "GREEN"); drawVertex(p2, "BLUE");
+        }
+        function drawVertex(p, c) {
+            ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = c === "RED" ? "#ff496d" : c === "GREEN" ? "#63e58b" : "#628cff";
+            ctx.fill();
+        }
+        function label(x, y, t) {
+            ctx.fillStyle = "#e8edf7"; ctx.font = "13px system-ui"; ctx.fillText(t, x, y);
+        }
+        document.querySelectorAll("button[data-stage]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll("button[data-stage]").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected");
+                const s = btn.dataset.stage;
+                stageText.innerHTML = "<h3>" + stages[s].title + "</h3><p>" + stages[s].text + "</p>";
+                drawTriangle(s);
+            });
+        });
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+        document.querySelector('button[data-stage="cpu"]').classList.add("selected");
+    </script>
+</body>
+
+</html>

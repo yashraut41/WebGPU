@@ -2,12 +2,13 @@
  * @author [Yahwant Raut]
  * @email [yashwantraut41@mail.com]
  * @create date 2026-07-15 22:58:11
- * @modify date 2026-08-18 22:23:10
+ * @modify date 2026-08-18 22:35:31
  * @desc [description]
  */
 
 
 //global variables 
+
 var canvas = null;
 var bFullScreen = false;
 var canvas_original_width;
@@ -24,15 +25,14 @@ let animationFrameId = null;
 
 // Added in 02-Perspective_Triangle 
 let buffer_position = null;
-// Added in 03-Multicored_Triangle
-
-let buffer_color = null;
 let render_pipeline = null;
 let buffer_mvpUniform = null;
 let bindingGroup_mvpUniform = null;
 let perspectiveProjectionMatrix = null;
+let depthTexture = null;
 
-var angle_triangle = 0.0;
+
+
 //how to start animation: to have requestAnimationFrame() to be called "crossbrowser" compatible
 var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame;
 
@@ -120,11 +120,11 @@ function onDeviceLost(info) {
     device = null;
     queue = null;
     buffer_position = null;
-    buffer_color = null;
     render_pipeline = null;
     buffer_mvpUniform = null;
     bindingGroup_mvpUniform = null;
     perspectiveProjectionMatrix = null;
+    depthTexture = null;
 }
 
 function toggleFullScreen() {
@@ -206,20 +206,13 @@ function initialize() {
         "{" +
         "mvpMatrix : mat4x4<f32>" +
         "};" +
-        "struct VertexOutput" +
-        "{" +
-        " @builtin(position) position : vec4<f32>," +
-        " @location(0) color : vec4<f32>" +
-        "};" +
         "@group(0) @binding(0) var<uniform> mvpUniform : MVPUniform;" +
         "@vertex" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(@location(0) vPos : vec4<f32>, @location(1) col: vec4<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "fn main(@location(0) vPos : vec4<f32>) -> @builtin(position) vec4<f32>" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
         "{" +
-        "var output : VertexOutput;" +
-        "output.position = mvpUniform.mvpMatrix * vPos;" +
-        "output.color = col;" +
-        "return output;" +
+        "let vPosition = mvpUniform.mvpMatrix * vPos;" +
+        "return vPosition;" +
         "}";
 
     // 2.Create Vertex shader module. GPUShaderModuleDescriptor
@@ -241,16 +234,12 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
-        "struct VertexOutput" +
-        "{" +
-        " @builtin(position) position : vec4<f32>," +
-        " @location(0) color : vec4<f32>" +
-        "};" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(output:VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
+        "fn main() -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
-        "return output.color ;" +
+        "let fragColor : vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);" +
+        "return  fragColor;" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
@@ -276,13 +265,6 @@ function initialize() {
         0.0, 1.0, 0.0, 1.0,   //apex
         -1.0, -1.0, 0.0, 1.0,   //left bottom
         1.0, -1.0, 0.0, 1.0    //right bottom
-    ]);
-
-
-    const vertex_color = new Float32Array([
-        1.0, 0.0, 0.0, 1.0,   //red
-        0.0, 1.0, 0.0, 1.0,   //green
-        0.0, 0.0, 1.0, 1.0    //blue
     ]);
 
     // 4.Create vertex buffer for postion. GPUBufferDescriptor
@@ -311,39 +293,6 @@ function initialize() {
     queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
 
     console.log("Writing Vertex position data  into position buffer is completed \n");
-
-
-
-
-    // 4.Create vertex buffer for cOLOR. GPUBufferDescriptor
-    // A. Create buffer descriptor
-    const bufferDescriptor_colors =
-    {
-        size: vertex_color.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    };
-
-    // B. Create  actual vertex buffer for position
-    // GPUBuffer
-    buffer_color = device.createBuffer(bufferDescriptor_colors);
-
-    if (buffer_color == null) {
-        console.log("Failed to create vertex buffer for COLOR \n");
-        throw Error("Failed to create vertex buffer for COLOR \n");
-    } else {
-        console.log("Vertex buffer for COLOR is created successfully \n");
-    }
-
-    //  C. Write data (COLOR array to above  created buffer)
-
-    // four parameters are : destination buffer, destination offset, source data, source offset, source data length
-
-    queue.writeBuffer(buffer_color, 0, vertex_color, 0, vertex_color.length);
-
-    console.log("Writing Vertex COLOR data  into color buffer is completed \n");
-
-
-
     //postion bufffer is buffer_position and we have written position data i.e vertex_position into it.  
 
     // 5.Now will do uniform plumbing for MVP Uniform
@@ -461,29 +410,14 @@ function initialize() {
         //jump vertex by vertex not instance by instance
     };
 
-    const colorVertexAttribute = {
-        shaderLocation: 1, // this matches with @location(1) in  shader
-        offset: 0, // this is the offset in the buffer where the attribute data starts
-        format: "float32x4" // this is the format of the attribute data
-    };
-
-    const colorVertexBufferLayout = {
-        attributes: [colorVertexAttribute], // this is the array of attributes for the vertex buffer
-        arrayStride: 4 * 4, // this is the size of one vertex in bytes (4 floats * 4 bytes per float)       
-        stepMode: "vertex" // this means that the vertex buffer will be jumped to the next vertex for each vertex shader invocation
-        //jump vertex by vertex not instance by instance
-    };
-
     //b. Create vertex shader state . GPUVertexState
     const vertexShadeState = {
         module: shaderModule_vertexShader, // this is the vertex shader module that we created earlier
         entryPoint: "main", // this is the entry point of the vertex shader
-        buffers: [positionVertexBufferLayout, colorVertexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
+        buffers: [positionVertexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
     };
 
     //=================== Vertex Shader State is created successfully ===================
-
-
 
     //c. Create fragment shader state. GPUFragmentState
     // we need to create GPU fragment state  but before that create GPU color target state  
@@ -510,12 +444,23 @@ function initialize() {
         topology: "triangle-list", // this means that the vertices will be interpreted as a list of triangles
     };
 
+    // Added in 06-Depth
+    //depth stencil state
+    const depthStencilState = {
+        depthWriteEnabled: true, // this means that the depth buffer will be written to
+        depthCompare: "less-equal", // this means that a fragment will pass the depth test if its depth is less than or equal to the current depth buffer value.
+        format: "depth24plus-stencil8", // without stencil we can use "depth24plus" 
+        //we are using "depth24plus-stencil8" because we may go for shadow mapping, deffeered rendering, decal rendering.
+    };
+
+
     //e.  Finally  create the render pipeline  descriptor PSO (GPURenderPipelineDescriptor)
     const pipelineDescriptor = {
         layout: pipelineLayout, // this is the pipeline layout that we created earlier
         vertex: vertexShadeState, // this is the vertex shader state that we created earlier
         fragment: fragentShaderState, // this is the fragment shader state that we created earlier
         primitive: primitiveState, // this is the primitive state that we created earlier
+        depthStencil: depthStencilState, // this is the depth stencil state that we created earlier
     };
 
     // B. Create render pipeline. GPURenderPipeline
@@ -534,7 +479,7 @@ function initialize() {
     clear_color = {
         r: 0.0,
         g: 0.0,
-        b: 0.0,
+        b: 1.0,
         a: 1.0
     };
 
@@ -552,6 +497,33 @@ function resize() {
         canvas.width = canvas_original_width;
         canvas.height = canvas_original_height;
     }
+
+    // Added in 06-Depth
+    // Create depth texture for depth testing
+
+    if (device != null) {
+        if (depthTexture != null) {
+            depthTexture.destroy();
+            depthTexture = null;
+        }
+        // to create depth texture we need to create GPUTextureDescriptor
+        const depthTextureDescriptor = {
+            size: [canvas.width, canvas.height, 1],
+            dimension: "2d",
+            format: "depth24plus-stencil8",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        };
+
+        // now create depth texture using above depth texture descriptor. GPUTexture
+        depthTexture = device.createTexture(depthTextureDescriptor);
+        if (depthTexture == null) {
+            console.log("Failed to create depth Texture \n");
+            throw Error("Failed to create  depth Texture  \n");
+        }
+    }
+
+
+
     // /Initialze projection matrix
     mat4.perspective(perspectiveProjectionMatrix,
         45.0 * Math.PI / 180.0,
@@ -589,8 +561,20 @@ function display() {
         storeOp: 'store'
     };
 
+    // Now  create render pass depth attachement 
+    const renderPassDepthAttachment = {
+        view: depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: "clear",
+        depthStoreOp: "store",
+        stencilClearValue: 0,
+        stencilLoadOp: "clear",
+        stencilStoreOp: "store",
+    }
+
     const renderPassDescriptor = {
-        colorAttachments: [renderPassColorAttachment]
+        colorAttachments: [renderPassColorAttachment],
+        depthStencilAttachment: renderPassDepthAttachment,
     };
 
     // Added in 02-Perspective_Triangle
@@ -598,11 +582,10 @@ function display() {
     //  A.  Create and initialize required matrices here  we need  model  view  matrix  and model view projection matrix
     const modelViewMatrix = mat4.create();
     const modelViewProjectionMatrix = mat4.create();
-
     //B.  Do  needed  transformations here  we do  only translation.
     // first param is target matrix, second param is source matrix, third param is translation vector
     mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -4.0]); //translate the modelview matrix by -4 units in z direction
-    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_triangle)); //
+
     //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
     mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelViewMatrix);
 
@@ -649,8 +632,6 @@ function display() {
     // 1. first parameter is the slot number of the vertex buffer,
     // 2. second parameter is the vertex buffer that we want to set
     renderPassEncoder.setVertexBuffer(0, buffer_position);
-    //set color buffer
-    renderPassEncoder.setVertexBuffer(1, buffer_color);
 
     //e. set bind group
     // bind group is the group of resources that we want to bind to the pipeline.
@@ -669,21 +650,13 @@ function display() {
     const commandBuffer = commandEncoder.finish();
     queue.submit([commandBuffer]);
 
-    // Update the rotation angle for the next frame
-    update();
-
 
     animationFrameId = requestAnimationFrame(display);
 
 }
 
-
 function update() {
-    //code
-    angle_triangle = angle_triangle + 1.0;
-    if (angle_triangle >= 360.0) {
-        angle_triangle = 0.0;
-    }
+
 }
 
 function uninitialize() {
@@ -692,6 +665,12 @@ function uninitialize() {
     if (animationFrameId != null) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
+    }
+
+    //destroy depth texure
+    if (depthTexture != null) {
+        depthTexture.destroy();
+        depthTexture = null;
     }
 
     if (context != null) {
@@ -704,7 +683,6 @@ function uninitialize() {
         device = null;
         queue = null;
         buffer_position = null;
-        buffer_color = null;
         render_pipeline = null;
         buffer_mvpUniform = null;
         bindingGroup_mvpUniform = null;
@@ -736,9 +714,4 @@ function keyDown(event) {
 function mousedown() {
     //code
     //do something here for mouse click
-}
-
-function degToRad(degrees) {
-    //code
-    return degrees * Math.PI / 180.0;
 }

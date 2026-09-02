@@ -491,6 +491,7 @@ function initialize() {
 
 
 //create bind group layout for uniform buffer
+// user defined function  
 function createBindGroupLayoutUniform(_bindingIndex, _shaderStageVisibility, _uniformType) {
 
     //code
@@ -538,7 +539,7 @@ function createUniformBuffer(_uniformBufferSize, _uniformBufferUsage) {
     return buffer;
 }
 
-
+// user defined function  
 function createBindGroupForUniform(
     _uniformBuffer,
     _uniformBufferOffset,
