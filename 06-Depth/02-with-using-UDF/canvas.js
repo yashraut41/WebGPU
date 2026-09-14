@@ -1,10 +1,10 @@
 /**
-* @author [Yahwant Raut]
-* @email [yashwantraut41@mail.com]
-* @create date 2026-07-15 22:58:11
-* @modify date 2026-08-19 22:01:55
-* @desc [description]
-*/
+ * @author [Yahwant Raut]
+ * @email [yashwantraut41@mail.com]
+ * @create date 2026-07-15 22:58:11
+ * @modify date 2026-08-18 22:35:31
+ * @desc [description]
+ */
 
 
 //global variables 
@@ -25,25 +25,11 @@ let animationFrameId = null;
 
 // Added in 02-Perspective_Triangle 
 let buffer_position = null;
-// Added in 03-Multicored_Triangle
-
-// let buffer_color = null;
-//added in texture 
-let buffer_texcoord = null;
 let render_pipeline = null;
 let buffer_mvpUniform = null;
 let bindingGroup_mvpUniform = null;
-
-//added in texture 
-let bindingGroup_texutre_and_sampler = null;
-
 let perspectiveProjectionMatrix = null;
-
 let depthTexture = null;
-let texture_smiley = null;
-let sampler_smiley = null;
-
-let buffer_mvpUniform_square = null;
 
 
 
@@ -119,7 +105,7 @@ async function main(params) {
     device.lost.then(onDeviceLost);
 
     // call stub functions from here  
-    await initialize();
+    initialize();
     resize();
     display();
 
@@ -134,16 +120,11 @@ function onDeviceLost(info) {
     device = null;
     queue = null;
     buffer_position = null;
-    buffer_texcoord = null;
     render_pipeline = null;
     buffer_mvpUniform = null;
     bindingGroup_mvpUniform = null;
     perspectiveProjectionMatrix = null;
     depthTexture = null;
-    texture_smiley = null;
-    sampler_smiley = null;
-    bindingGroup_texutre_and_sampler = null;
-
 }
 
 function toggleFullScreen() {
@@ -189,7 +170,7 @@ function onFullScreenChange() {
     resize();
 }
 
-async function initialize() {
+function initialize() {
 
     queue = device.queue;
 
@@ -225,20 +206,13 @@ async function initialize() {
         "{" +
         "mvpMatrix : mat4x4<f32>" +
         "};" +
-        "struct VertexOutput" +
-        "{" +
-        " @builtin(position) position : vec4<f32>," +
-        " @location(0) texcoords : vec2<f32>" +
-        "};" +
         "@group(0) @binding(0) var<uniform> mvpUniform : MVPUniform;" +
         "@vertex" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(@location(0) vPos : vec4<f32>, @location(1) tex: vec2<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "fn main(@location(0) vPos : vec4<f32>) -> @builtin(position) vec4<f32>" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
         "{" +
-        "var output : VertexOutput;" +
-        "output.position = mvpUniform.mvpMatrix * vPos;" +
-        "output.texcoords = tex;" +
-        "return output;" +
+        "let vPosition = mvpUniform.mvpMatrix * vPos;" +
+        "return vPosition;" +
         "}";
 
     // 2.Create Vertex shader module. GPUShaderModuleDescriptor
@@ -260,19 +234,12 @@ async function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
-        "struct VertexOutput" +
-        "{" +
-        " @builtin(position) position : vec4<f32>," +
-        " @location(0) texcoords : vec2<f32>" +
-        "};" +
-        "@group(1) @binding(0) var myTexture2D: texture_2d<f32>;" +
-        "@group(1) @binding(1) var mySampler: sampler;" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(output:VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
+        "fn main() -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
-        "var color = textureSample(myTexture2D, mySampler, output.texcoords );" +
-        "return color;" +
+        "let fragColor : vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);" +
+        "return  fragColor;" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
@@ -295,25 +262,9 @@ async function initialize() {
 
     // 3.Declare postion array.
     const vertex_position = new Float32Array([
-        1.0, 1.0, 0.0, 1.0,   // right top 
-        -1.0, 1.0, 0.0, 1.0,   //left top
+        0.0, 1.0, 0.0, 1.0,   //apex
         -1.0, -1.0, 0.0, 1.0,   //left bottom
-
-        -1.0, -1.0, 0.0, 1.0,   //left bottom
-        1.0, -1.0, 0.0, 1.0,    //right bottom
-        1.0, 1.0, 0.0, 1.0    // right top
-    ]);
-
-
-    // Updated  in texture
-    const vertex_texcoord = new Float32Array([
-        1.0, 1.0,
-        0.0, 1.0,
-        0.0, 0.0,
-
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0, 1.0
+        1.0, -1.0, 0.0, 1.0    //right bottom
     ]);
 
     // 4.Create vertex buffer for postion. GPUBufferDescriptor
@@ -342,60 +293,21 @@ async function initialize() {
     queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
 
     console.log("Writing Vertex position data  into position buffer is completed \n");
+    //postion bufffer is buffer_position and we have written position data i.e vertex_position into it.  
 
-
-
-    //======================= Texcoord buffer started ======================
-    // 4.Create vertex buffer for cOLOR. GPUBufferDescriptor
-    // A. Create buffer descriptor
-    const bufferDescriptor_texcoord =
-    {
-        size: vertex_texcoord.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    };
-
-    // B. Create  actual vertex buffer for position
-    // GPUBuffer
-    buffer_texcoord = device.createBuffer(bufferDescriptor_texcoord);
-
-    if (buffer_texcoord == null) {
-        console.log("Failed to create vertex buffer for Texcoord \n");
-        throw Error("Failed to create vertex buffer for Texcoord \n");
-    } else {
-        console.log("Vertex buffer for Texcoord is created successfully \n");
-    }
-
-    //  C. Write data (COLOR array to above  created buffer)
-
-    // four parameters are : destination buffer, destination offset, source data, source offset, source data length
-
-    queue.writeBuffer(buffer_texcoord, 0, vertex_texcoord, 0, buffer_texcoord.length);
-
-    console.log("Writing Vertex Texcoord data  into texcoord buffer is completed \n");
-
-
-    const bindGroupLayout_mvpUniform = createBindGroupLayoutUniform(
+    // 5.Now will do uniform plumbing for MVP Uniform
+    // 5-> A. Uniforms will bind  to bind group in shader so create bind  group layout  for  our MVP  uniform
+    // a. Bind group layout entry GPUBindGroupLayoutEntry
+      const bindGroupLayout_mvpUniform = createBindGroupLayoutUniform(
         0,
         GPUShaderStage.VERTEX,
         "uniform"
     );
 
-
-    const bindGrouplayout_texture_and_sampler = createBindLayoutForTexutreAndSampler(
-        "float",
-        "2d",
-        false,
-        0, //texture binding index this relate to fragment shade
-        GPUShaderStage.FRAGMENT,
-        "filtering",
-        1,
-        GPUShaderStage.FRAGMENT,
-    );
-
     // 5->B. Create pipeline Layout  to specify  one  or many above  bind  groups layout.
     //a. first we will create pipeline layout descriptor. GPUPipelineLayoutDescriptor then
     const pipelineLayoutDescriptor = {
-        bindGroupLayouts: [bindGroupLayout_mvpUniform, bindGrouplayout_texture_and_sampler]
+        bindGroupLayouts: [bindGroupLayout_mvpUniform]
     };
 
     // b. Create pipeline layout. GPUPipelineLayout
@@ -414,56 +326,14 @@ async function initialize() {
     const mvpUniformSize = 4 * 16;
 
 
-
-    // mvp uniform buffer for Square
     buffer_mvpUniform = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
-    // create bind group for mvp uniform buffer for square 
+
+     // d. Create bind group for uniform buffer. GPUBindGroup
+    // ## Will set this binding group in display.
+
     bindingGroup_mvpUniform = createBindGroupForUniform(buffer_mvpUniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
-
-
-
-    // load the tex
-    texture_smiley = await loadTexture('Smiley.png');
-    if (texture_smiley == null) {
-        console.log("Failed to load texture image \n");
-        throw Error("Failed to load texture image \n");
-    } else {
-        console.log("load texture image created successfully \n");
-    }
-
-    //texture sampler descriptor
-    const samplerDescriptor = {
-        magFilter: "linear",
-        minFilter: "linear",
-    };
-
-    //create texture sampler
-    sampler_smiley = device.createSampler(samplerDescriptor);
-    if (sampler_smiley == null) {
-        console.log("Failed to Create texture sampler \n");
-        throw Error("Failed to Create texture sampler \n");
-    } else {
-        console.log(" Texture sampler created successfully \n");
-    }
-
-
-    //create texture and sampler bind group
-
-    bindingGroup_texutre_and_sampler = createBindGroupForTextureAndSampler(
-        0,
-        texture_smiley,
-        1,
-        sampler_smiley,
-        bindGrouplayout_texture_and_sampler
-    );
-
-
-
-
-
-
-
+    
 
     // 6   we will create PSO (Pipeline State Object) now we are going to create what is needed for PSO (Pipeline State Object) 
     // A Create render pipeline descriptor. GPURenderPipelineDescriptor
@@ -483,29 +353,14 @@ async function initialize() {
         //jump vertex by vertex not instance by instance
     };
 
-    const texcoordsVertexAttribute = {
-        shaderLocation: 1, // this matches with @location(1) in  shader //
-        offset: 0, // this is the offset in the buffer where the attribute data starts
-        format: "float32x2" // this is the format of the attribute data
-    };
-
-    const texcoordsVertexBufferLayout = {
-        attributes: [texcoordsVertexAttribute], // this is the array of attributes for the vertex buffer
-        arrayStride: 4 * 2, // this is the size of one vertex in bytes (4 floats * 4 bytes per float)       
-        stepMode: "vertex" // this means that the vertex buffer will be jumped to the next vertex for each vertex shader invocation
-        //jump vertex by vertex not instance by instance
-    };
-
     //b. Create vertex shader state . GPUVertexState
     const vertexShadeState = {
         module: shaderModule_vertexShader, // this is the vertex shader module that we created earlier
         entryPoint: "main", // this is the entry point of the vertex shader
-        buffers: [positionVertexBufferLayout, texcoordsVertexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
+        buffers: [positionVertexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
     };
 
     //=================== Vertex Shader State is created successfully ===================
-
-
 
     //c. Create fragment shader state. GPUFragmentState
     // we need to create GPU fragment state  but before that create GPU color target state  
@@ -532,6 +387,7 @@ async function initialize() {
         topology: "triangle-list", // this means that the vertices will be interpreted as a list of triangles
     };
 
+    // Added in 06-Depth
     //depth stencil state
     const depthStencilState = {
         depthWriteEnabled: true, // this means that the depth buffer will be written to
@@ -547,7 +403,7 @@ async function initialize() {
         vertex: vertexShadeState, // this is the vertex shader state that we created earlier
         fragment: fragentShaderState, // this is the fragment shader state that we created earlier
         primitive: primitiveState, // this is the primitive state that we created earlier
-        depthStencil: depthStencilState,
+        depthStencil: depthStencilState, // this is the depth stencil state that we created earlier
     };
 
     // B. Create render pipeline. GPURenderPipeline
@@ -566,7 +422,7 @@ async function initialize() {
     clear_color = {
         r: 0.0,
         g: 0.0,
-        b: 0.0,
+        b: 1.0,
         a: 1.0
     };
 
@@ -584,6 +440,9 @@ function resize() {
         canvas.width = canvas_original_width;
         canvas.height = canvas_original_height;
     }
+
+    // Added in 06-Depth
+    // Create depth texture for depth testing
 
     if (device != null) {
         if (depthTexture != null) {
@@ -605,6 +464,8 @@ function resize() {
             throw Error("Failed to create  depth Texture  \n");
         }
     }
+
+
 
     // /Initialze projection matrix
     mat4.perspective(perspectiveProjectionMatrix,
@@ -657,7 +518,6 @@ function display() {
     const renderPassDescriptor = {
         colorAttachments: [renderPassColorAttachment],
         depthStencilAttachment: renderPassDepthAttachment,
-
     };
 
     // Added in 02-Perspective_Triangle
@@ -715,19 +575,16 @@ function display() {
     // 1. first parameter is the slot number of the vertex buffer,
     // 2. second parameter is the vertex buffer that we want to set
     renderPassEncoder.setVertexBuffer(0, buffer_position);
-    //set color buffer
-    renderPassEncoder.setVertexBuffer(1, buffer_texcoord);
 
     //e. set bind group
     // bind group is the group of resources that we want to bind to the pipeline.
     // 1. first parameter is the slot number of the bind group,
     // 2. second parameter is the bind group that we want to set
     renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform);
-    renderPassEncoder.setBindGroup(1, bindingGroup_texutre_and_sampler);
 
     //4. Draw the triangle
     // 1. first parameter is the number of vertices to draw
-    renderPassEncoder.draw(6);
+    renderPassEncoder.draw(3);
 
     //end the render pass
     renderPassEncoder.end();
@@ -753,17 +610,12 @@ function uninitialize() {
         animationFrameId = null;
     }
 
-    //destroy texture
-    if (texture_smiley != null) {
-        texture_smiley.destroy();
-        texture_smiley = null;
-    }
-
     //destroy depth texure
     if (depthTexture != null) {
         depthTexture.destroy();
         depthTexture = null;
     }
+
     if (context != null) {
         context.unconfigure();
         context = null;
@@ -774,13 +626,9 @@ function uninitialize() {
         device = null;
         queue = null;
         buffer_position = null;
-        buffer_texcoord = null;
         render_pipeline = null;
         buffer_mvpUniform = null;
         bindingGroup_mvpUniform = null;
-        sampler_smiley = null;
-        bindingGroup_texutre_and_sampler = null;
-
     }
 
     perspectiveProjectionMatrix = null;
@@ -812,9 +660,12 @@ function mousedown() {
 }
 
 
+//create bind group layout for uniform buffer
+// user defined function  
 function createBindGroupLayoutUniform(_bindingIndex, _shaderStageVisibility, _uniformType) {
 
     //code
+
     const bindGroupLayoutEntry = {
         binding: _bindingIndex,
         visibility: _shaderStageVisibility,
@@ -838,6 +689,7 @@ function createBindGroupLayoutUniform(_bindingIndex, _shaderStageVisibility, _un
 
     return bindGroupLayout;
 }
+
 
 // user defined function  
 function createUniformBuffer(_uniformBufferSize, _uniformBufferUsage) {
@@ -892,142 +744,6 @@ function createBindGroupForUniform(
         console.log("Bind group for uniform buffer is created successfully \n");
     }
 
-    return bindGroup;
-
-}
-
-//3 new UDF's for texture and sampler
-async function loadTexture(_imageFileName) {
-
-    const image = new Image();
-    image.src = _imageFileName;
-    await image.decode();
-    const imageBitmap = await createImageBitmap(image);
-    if (imageBitmap == null) {
-        throw Error('createImageBitmap faild ')
-    }
-
-    //now create texture descriptor based on above imageBitmap
-    const textureDescriptor = {
-        size: [imageBitmap.width, imageBitmap.height, 1],
-        dimension: "2d",
-        format: "rgba8unorm",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
-    };
-
-    const _texture = device.createTexture(textureDescriptor);
-    if (_texture == null) {
-        console.log("Failed to create _texture \n");
-        throw Error("Failed to create _texture \n");
-    } else {
-        console.log("_texture created successfully \n");
-    }
-
-    const copySource = {
-        source: imageBitmap,
-        flipY: true
-    };
-
-    const copyDestination = {
-        texture: _texture,
-        mipLevel: 0
-    };
-
-    queue.copyExternalImageToTexture(copySource, copyDestination, textureDescriptor.size);
-
-    return _texture;
-}
-
-function createBindLayoutForTexutreAndSampler(
-    _textureSampleType,
-    _textureViewDimension,
-    _isTextureMultiSampled,
-    _textureBindingIndex,
-    _textureShadeStageVisbility,
-    _samplerType,
-    _samplerBindingIndex,
-    _samplerShaderStageVsibility
-) {
-
-    //code 
-    //create binding layout
-    const bindingLayout_texture = {
-        sampleType: _textureSampleType,
-        viewDimension: _textureViewDimension,
-        multisampled: _isTextureMultiSampled
-    };
-
-    //now create bind group layout entry
-    const bindGroupLayoutEntry_texture = {
-        binding: _textureBindingIndex,
-        visibility: _textureShadeStageVisbility,
-        texture: bindingLayout_texture
-    };
-
-    //now create binding layout for sampler 
-    const bindingLayout_sampler = {
-        type: _samplerType
-    };
-
-    //now sampler bind group layout entry
-    const bindGroupLayoutEntry_sampler = {
-        binding: _samplerBindingIndex,
-        visibility: _samplerShaderStageVsibility,
-        sampler: bindingLayout_sampler
-    };
-
-    //now create bind group layout descriptor
-    const bindGroupLayoutDescriptor = {
-        entries: [bindGroupLayoutEntry_texture, bindGroupLayoutEntry_sampler],
-    };
-
-    //now create actual bind group layout 
-    const bindgroupLayout = device.createBindGroupLayout(bindGroupLayoutDescriptor);
-    if (bindgroupLayout == null) {
-        console.log("Failed to create bindgroupLayout \n");
-        throw Error("Failed to create bindgroupLayout \n");
-    } else {
-        console.log("bindgroupLayout created successfully \n");
-    }
-
-    return bindgroupLayout;
-
-}
-
-function createBindGroupForTextureAndSampler(
-    _textureBindingIndex,
-    _texture,
-    _samplerBindingIndex,
-    _sampler,
-    _bindGroupLayout
-) {
-    //code 
-    // create Bind grpup entry for texture
-    const bindGroupEntry_texture = {
-        binding: _textureBindingIndex,
-        resource: _texture.createView(),
-    };
-
-    //create bind group entry for sampler
-    const bindGroupEntry_sampler = {
-        binding: _samplerBindingIndex,
-        resource: _sampler
-    }
-
-    //now create bind group descriptor for texture and sampler
-    const bindGroupDescriptor = {
-        layout: _bindGroupLayout,
-        entries: [bindGroupEntry_texture, bindGroupEntry_sampler]
-    };
-
-    //now create the acatual bind group
-    const bindGroup = device.createBindGroup(bindGroupDescriptor);
-    if (bindGroup == null) {
-        console.log("Failed to create bindGroup \n");
-        throw Error("Failed to create bindGroup \n");
-    } else {
-        console.log("bindGroup created successfully \n");
-    }
     return bindGroup;
 
 }
