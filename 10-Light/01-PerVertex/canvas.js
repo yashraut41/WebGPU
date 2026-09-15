@@ -1,8 +1,8 @@
 /**
  * @author Yashwant Raut
  * @email [example@mail.com]
- * @create date 2026-09-13 14:59:17
- * @modify date 2026-09-13 14:59:17
+ * @create date 2026-09-15 23:01:25
+ * @modify date 2026-09-15 23:01:25
  * @desc [description]
  */
 
@@ -26,7 +26,7 @@ let animationFrameId = null;
 // Added in 02-Perspective_Triangle 
 
 let render_pipeline = null;
-let buffer_mvpUniform = null;
+let buffer_uniform = null;
 let bindingGroup_mvpUniform = null;
 let perspectiveProjectionMatrix = null;
 let depthTexture = null;
@@ -366,13 +366,13 @@ function initialize() {
     const mvpUniformSize = 4 * 16;
 
 
-    buffer_mvpUniform = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    buffer_uniform = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
 
     // d. Create bind group for uniform buffer. GPUBindGroup
     // ## Will set this binding group in display.
 
-    bindingGroup_mvpUniform = createBindGroupForUniform(buffer_mvpUniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
+    bindingGroup_mvpUniform = createBindGroupForUniform(buffer_uniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
 
 
     // 6   we will create PSO (Pipeline State Object) now we are going to create what is needed for PSO (Pipeline State Object) 
@@ -581,7 +581,7 @@ function display() {
     // 3. this is source data that we want to write in buffer, 
     // 4. in modelViewProjection matrix from to read so we are saying from 0th  offset,
     // 5. how much data we want to write from source 
-    queue.writeBuffer(buffer_mvpUniform, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
+    queue.writeBuffer(buffer_uniform, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
 
 
     //2. Start the render pass
@@ -802,7 +802,7 @@ function onDeviceLost(info) {
     device = null;
     queue = null;
     render_pipeline = null;
-    buffer_mvpUniform = null;
+    buffer_uniform = null;
     bindingGroup_mvpUniform = null;
     perspectiveProjectionMatrix = null;
     depthTexture = null;
@@ -839,7 +839,7 @@ function uninitialize() {
         queue = null;
 
         render_pipeline = null;
-        buffer_mvpUniform = null;
+        buffer_uniform = null;
         bindingGroup_mvpUniform = null;
 
         buffer_position = null;
