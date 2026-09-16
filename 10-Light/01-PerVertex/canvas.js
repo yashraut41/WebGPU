@@ -27,7 +27,7 @@ let animationFrameId = null;
 
 let render_pipeline = null;
 let buffer_uniform = null;
-let bindingGroup_mvpUniform = null;
+let bindingGroup_uniform = null;
 let perspectiveProjectionMatrix = null;
 let depthTexture = null;
 
@@ -39,6 +39,21 @@ let buffer_position = null;
 let buffer_normal = null;
 let buffer_texcoord = null;
 let buffer_element = null;
+
+//Added in 10-Light-Per-Vertex
+var lightAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
+var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var lightPosition = new Float32Array([100.0, 100.0, 100.0, 1.0]);
+
+var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
+var materialDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var materialSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var materialShininess = new Float32Array([50.0, 0.0, 0.0, 0.0]);
+var lKeyPressed = new uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
+
+var isLightingEnabled = false;
+
 
 
 
@@ -200,18 +215,90 @@ function initialize() {
     //1.Write vertex shader code as string.
     // vertex shader code in WGSL
     const vertexShaderSourceCode =
-        "struct MVPUniform" +
+        "struct MyUniformData" +
         "{" +
-        "mvpMatrix : mat4x4<f32>" +
+        "modelMatrix : mat4x4<f32>," +
+        "viewMatrix : mat4x4<f32>," +
+        "projectionMatrix : mat4x4<f32>," +
+        "lightAmbient : vec4<f32>," +
+        "lightDiffuse : vec4<f32>," +
+        "lightSpecular : vec4<f32>," +
+        "lightPosition : vec4<f32>," +
+        "materialAmbient : vec4<f32>," +
+        "materialDiffuse : vec4<f32>," +
+        "materialSpecular : vec4<f32>," +
+        "materialShininess : vec4<f32>," +
+        "lKeyisPressed : vec4<u32>" +
         "};" +
-        "@group(0) @binding(0) var<uniform> mvpUniform : MVPUniform;" +
+        "struct VertexOutput" +
+        "{" +
+        "@builtin(position) : vec4<f32>," +
+        "@location(0) phong_ads_color:vec3<f32>," +
+        "};" +
+        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@vertex" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(@location(0) vPos : vec3<f32>) -> @builtin(position) vec4<f32>" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "fn main(@location(0) vPos : vec3<f32>,@location(1) vNormal : vec3<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
         "{" +
-        "let vPosition = mvpUniform.mvpMatrix * vec4(vPos,1.0);" +
-        "return vPosition;" +
+        "var output : VertexOutput;" +
+        "if(uMyUniformData.lKeyisPressed.x == 1u)" + // WGSL is strictyl typed with no implicit type conversion or promotion so we have to use 1u for unsigned int 1
+        "{" +
+        "let eyeCoordinates : vec4<f32> = uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
+        "let modelViewMatrix: mat3x3<f32> = mat3FromMat4( uMyUniformData.viewMatrix * uMyUniformData.modelMatrix )" +
+        "let normalMatrix: mat3x3<f32> = transpose(inverse3x3(modelViewMatrix));" +
+        "let transformedNormal : vec3<f32> = normalize(normalMatrix * vNormal);" +
+        "let lightDirection : vec3<f32> = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
+        "let viewerVector : vec3<f32> = normalize(-eyeCoordinates.xyz);" +
+        "let reflectionVector : vec3<f32> = reflect(-lightDirection,transformedNormal);" +
+        "let ambient : vec3<f32> = uMyUniformData.lightAmbient.xyz * uMyUniformData.materialAmbient.xyz;" +
+        "let diffuse : vec3<f32> = uMyUniformData.lightDiffuse.xyz * uMyUniformData.materialDiffuse.xyz * max(dot(lightDirection,transformedNormal),0.0);" +
+        "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,viewerVector),0.0),uMyUniformData.materialShininess.x);" +
+        "output.phong_ads_color = ambient + diffuse + specular;" +
+        "}" +
+        "else" +
+        "{" +
+        "output.phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "}" +
+        "output.position = uMyUniformData.projectionMatrix * uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
+        "return output;" +
+        "}" +
+        "fn mat3FromMat4(m:mat4x4<f32>)->mat3x3<f32>" +
+        "{" +
+        "return(mat3x3<f32>(m[0].xyz, m[1].xyz, m[2].xyz));" +
+        "}" +
+        // *******************************************************************
+
+
+        // inverse
+        "fn inverse3x3(m:mat3x3<f32>)->mat3x3<f32>" +
+        "{" +
+        "let determinant = m[0][0] * (m[1][1]*m[2][2] - m[2][1]*m[1][2]) - " +
+        "                  m[1][0] * (m[0][1]*m[2][2] - m[2][1]*m[0][2]) + " +
+        "                  m[2][0] * (m[0][1]*m[1][2] - m[1][1]*m[0][2]);" +
+        "let inverse_determinant = 1.0 / determinant;" +
+        "let column0 = vec3<f32>" +
+        "(" +
+        "    (m[1][1]*m[2][2] - m[2][1]*m[1][2]) * inverse_determinant," +
+        "    (m[2][1]*m[0][2] - m[0][1]*m[2][2]) * inverse_determinant," +
+        "    (m[0][1]*m[1][2] - m[1][1]*m[0][2]) * inverse_determinant" +
+        ");" +
+        "let column1 = vec3<f32>" +
+        "(" +
+        "    (m[2][0]*m[1][2] - m[1][0]*m[2][2]) * inverse_determinant," +
+        "    (m[0][0]*m[2][2] - m[2][0]*m[0][2]) * inverse_determinant," +
+        "    (m[1][0]*m[0][2] - m[0][0]*m[1][2]) * inverse_determinant" +
+        ");" +
+        "let column2 = vec3<f32>" +
+        "(" +
+        "    (m[1][0]*m[2][1] - m[2][0]*m[1][1]) * inverse_determinant," +
+        "    (m[2][0]*m[0][1] - m[0][0]*m[2][1]) * inverse_determinant," +
+        "    (m[0][0]*m[1][1] - m[1][0]*m[0][1]) * inverse_determinant" +
+        ");" +
+        "return(mat3x3<f32>(column0, column1, column2));" +
         "}";
+    // *******************************************************************
+
+
 
     // 2.Create Vertex shader module. GPUShaderModuleDescriptor
     // A. Create shader module descriptor.
@@ -232,12 +319,16 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
+        "struct VertexOutput" +
+        "{" +
+        "@builtin(position) : vec4<f32>," +
+        "@location(0) phong_ads_color:vec3<f32>," +
+        "};" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
-        "fn main() -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
+        "fn main(output: VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
-        "let fragColor : vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);" +
-        "return  fragColor;" +
+        "return  vec4<f32>(output.phong_ads_color,1.0);" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
@@ -307,33 +398,6 @@ function initialize() {
         console.log("Index buffer for element is created successfully \n");
     }
 
-    // 4.Create vertex buffer for postion. GPUBufferDescriptor
-    // A. Create buffer descriptor
-    // const bufferDescriptor_position =
-    // {
-    //     size: vertex_position.byteLength,
-    //     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    // };
-
-    // // B. Create  actual vertex buffer for position
-    // // GPUBuffer
-    // buffer_position = device.createBuffer(bufferDescriptor_position);
-
-    // if (buffer_position == null) {
-    //     console.log("Failed to create vertex buffer for position \n");
-    //     throw Error("Failed to create vertex buffer for position \n");
-    // } else {
-    //     console.log("Vertex buffer for position is created successfully \n");
-    // }
-
-    //  C. Write data (position array to above  created buffer)
-
-    // four parameters are : destination buffer, destination offset, source data, source offset, source data length
-
-    // queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
-
-    // console.log("Writing Vertex position data  into position buffer is completed \n");
-    //postion bufffer is buffer_position and we have written position data i.e vertex_position into it.  
 
     // 5.Now will do uniform plumbing for MVP Uniform
     // 5-> A. Uniforms will bind  to bind group in shader so create bind  group layout  for  our MVP  uniform
@@ -372,7 +436,7 @@ function initialize() {
     // d. Create bind group for uniform buffer. GPUBindGroup
     // ## Will set this binding group in display.
 
-    bindingGroup_mvpUniform = createBindGroupForUniform(buffer_uniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
+    bindingGroup_uniform = createBindGroupForUniform(buffer_uniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
 
 
     // 6   we will create PSO (Pipeline State Object) now we are going to create what is needed for PSO (Pipeline State Object) 
@@ -622,7 +686,7 @@ function display() {
     // bind group is the group of resources that we want to bind to the pipeline.
     // 1. first parameter is the slot number of the bind group,
     // 2. second parameter is the bind group that we want to set
-    renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform);
+    renderPassEncoder.setBindGroup(0, bindingGroup_uniform);
 
     //4. Draw the triangle
     // 1. first parameter is the number of vertices to draw
@@ -803,7 +867,7 @@ function onDeviceLost(info) {
     queue = null;
     render_pipeline = null;
     buffer_uniform = null;
-    bindingGroup_mvpUniform = null;
+    bindingGroup_uniform = null;
     perspectiveProjectionMatrix = null;
     depthTexture = null;
     sphere = null;
@@ -840,7 +904,7 @@ function uninitialize() {
 
         render_pipeline = null;
         buffer_uniform = null;
-        bindingGroup_mvpUniform = null;
+        bindingGroup_uniform = null;
 
         buffer_position = null;
         buffer_normal = null;
