@@ -41,15 +41,15 @@ let buffer_texcoord = null;
 let buffer_element = null;
 
 //Added in 10-Light-Per-Vertex
-var lightAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
+var lightAmbient = new Float32Array([0.1, 0.1, 0.1, 0.0]);
 var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
 var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
 var lightPosition = new Float32Array([100.0, 100.0, 100.0, 1.0]);
 
 var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
-var materialDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
-var materialSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
-var materialShininess = new Float32Array([50.0, 0.0, 0.0, 0.0]);
+var materialDiffuse = new Float32Array([0.5, 0.2, 0.7, 0.0]);
+var materialSpecular = new Float32Array([0.7, 0.7, 0.7, 0.0]);
+var materialShininess = new Float32Array([128.0, 0.0, 0.0, 0.0]);
 var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
 
 var isLightingEnabled = false;
@@ -217,23 +217,25 @@ function initialize() {
     const vertexShaderSourceCode =
         "struct MyUniformData" +
         "{" +
-            "modelMatrix : mat4x4<f32>," +
-            "viewMatrix : mat4x4<f32>," +
-            "projectionMatrix : mat4x4<f32>," +
-            "lightAmbient : vec4<f32>," +
-            "lightDiffuse : vec4<f32>," +
-            "lightSpecular : vec4<f32>," +
-            "lightPosition : vec4<f32>," +
-            "materialAmbient : vec4<f32>," +
-            "materialDiffuse : vec4<f32>," +
-            "materialSpecular : vec4<f32>," +
-            "materialShininess : vec4<f32>," +
-            "lKeyisPressed : vec4<u32>" +
+        "modelMatrix : mat4x4<f32>," +
+        "viewMatrix : mat4x4<f32>," +
+        "projectionMatrix : mat4x4<f32>," +
+        "lightAmbient : vec4<f32>," +
+        "lightDiffuse : vec4<f32>," +
+        "lightSpecular : vec4<f32>," +
+        "lightPosition : vec4<f32>," +
+        "materialAmbient : vec4<f32>," +
+        "materialDiffuse : vec4<f32>," +
+        "materialSpecular : vec4<f32>," +
+        "materialShininess : vec4<f32>," +
+        "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
-            "@builtin(position) position: vec4<f32>," +
-            "@location(0) phong_ads_color:vec3<f32>," +
+        "@builtin(position) position: vec4<f32>," +
+        "@location(0) transformedNormal:vec3<f32>," +
+        "@location(1) lightDirection:vec3<f32>," +
+        "@location(2) viewerVector:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@vertex" + // vertex shader entry point and shader type
@@ -243,21 +245,12 @@ function initialize() {
         "var output : VertexOutput;" +
         "if(uMyUniformData.lKeyisPressed.x == 1u)" + // WGSL is strictyl typed with no implicit type conversion or promotion so we have to use 1u for unsigned int 1
         "{" +
-            "let eyeCoordinates : vec4<f32> = uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
-            "let modelViewMatrix: mat3x3<f32> = mat3FromMat4( uMyUniformData.viewMatrix * uMyUniformData.modelMatrix );" +
-            "let normalMatrix: mat3x3<f32> = transpose(inverse3x3(modelViewMatrix));" +
-            "let transformedNormal : vec3<f32> = normalize(normalMatrix * vNormal);" +
-            "let lightDirection : vec3<f32> = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
-            "let viewerVector : vec3<f32> = normalize(-eyeCoordinates.xyz);" +
-            "let reflectionVector : vec3<f32> = reflect(-lightDirection,transformedNormal);" +
-            "let ambient : vec3<f32> = uMyUniformData.lightAmbient.xyz * uMyUniformData.materialAmbient.xyz;" +
-            "let diffuse : vec3<f32> = uMyUniformData.lightDiffuse.xyz * uMyUniformData.materialDiffuse.xyz * max(dot(lightDirection,transformedNormal),0.0);" +
-            "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,viewerVector),0.0),uMyUniformData.materialShininess.x);" +
-            "output.phong_ads_color = ambient + diffuse + specular;" +
-        "}" +
-        "else" +
-        "{" +
-             "output.phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "let eyeCoordinates : vec4<f32> = uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
+        "let modelViewMatrix: mat3x3<f32> = mat3FromMat4( uMyUniformData.viewMatrix * uMyUniformData.modelMatrix );" +
+        "let normalMatrix: mat3x3<f32> = transpose(inverse3x3(modelViewMatrix));" +
+        "output.transformedNormal =  normalize(normalMatrix * vNormal);" +
+        "output.lightDirection = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
+        "output.viewerVector = normalize(-eyeCoordinates.xyz);" +
         "}" +
         "output.position = uMyUniformData.projectionMatrix * uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
         "return output;" +
@@ -319,16 +312,50 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
+        "struct MyUniformData" +
+        "{" +
+        "modelMatrix : mat4x4<f32>," +
+        "viewMatrix : mat4x4<f32>," +
+        "projectionMatrix : mat4x4<f32>," +
+        "lightAmbient : vec4<f32>," +
+        "lightDiffuse : vec4<f32>," +
+        "lightSpecular : vec4<f32>," +
+        "lightPosition : vec4<f32>," +
+        "materialAmbient : vec4<f32>," +
+        "materialDiffuse : vec4<f32>," +
+        "materialSpecular : vec4<f32>," +
+        "materialShininess : vec4<f32>," +
+        "lKeyisPressed : vec4<u32>" +
+        "};" +
         "struct VertexOutput" +
         "{" +
         "@builtin(position) position: vec4<f32>," +
-        "@location(0) phong_ads_color:vec3<f32>," +
+        "@location(0) transformedNormal:vec3<f32>," +
+        "@location(1) lightDirection:vec3<f32>," +
+        "@location(2) viewerVector:vec3<f32>" +
         "};" +
+        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
         "fn main(output: VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
-        "return  vec4<f32>(output.phong_ads_color,1.0);" +
+        "var phong_ads_color : vec3<f32>;" +
+        "if(uMyUniformData.lKeyisPressed.x == 1u)" +
+        "{" +
+        "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
+        "let normalized_lightDirection : vec3<f32> = normalize(output.lightDirection);" +
+        "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
+        "let ambient : vec3<f32> = uMyUniformData.lightAmbient.xyz * uMyUniformData.materialAmbient.xyz;" +
+        "let diffuse : vec3<f32> = uMyUniformData.lightDiffuse.xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0);" +
+        "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
+        "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
+        "phong_ads_color = ambient + diffuse + specular;" +
+        "}" +
+        "else" +
+        "{" +
+        "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "}" +
+        "return  vec4<f32>(phong_ads_color,1.0);" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
@@ -349,12 +376,6 @@ function initialize() {
     }
 
 
-    // 3.Declare postion array.
-    // const vertex_position = new Float32Array([
-    //     0.0, 1.0, 0.0, 1.0,   //apex
-    //     -1.0, -1.0, 0.0, 1.0,   //left bottom
-    //     1.0, -1.0, 0.0, 1.0    //right bottom
-    // ]);
 
     sphere = new Mesh();
     makeSphere(sphere, 2.0, 30, 30);
@@ -404,7 +425,7 @@ function initialize() {
     // a. Bind group layout entry GPUBindGroupLayoutEntry
     const bindGroupLayout_uniform = createBindGroupLayoutUniform(
         0,
-        GPUShaderStage.VERTEX,
+        GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, // this is very very very imp cause now we are sending uniform data to both vertex and fragment shader so we need to specify both vertex and fragment shader stage here
         "uniform"
     );
 
