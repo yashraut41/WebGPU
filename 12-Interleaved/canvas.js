@@ -1,8 +1,8 @@
 /**
  * @author Yashwant Raut
  * @email [example@mail.com]
- * @create date 2026-09-22 09:51:41
- * @modify date 2026-09-22 09:51:41
+ * @create date 2026-09-23 22:32:26
+ * @modify date 2026-09-23 22:32:26
  * @desc [description]
  */
 
@@ -32,52 +32,24 @@ let bindingGroup_uniform = null;
 let perspectiveProjectionMatrix = null;
 let depthTexture = null;
 
+//for cube
+let buffer_interleaved = null;
+let texture_marble = null;
+let sampler_marble = null;
+let bindingGroup_texutre_and_sampler = null;
+var angleCube = 0.0;
 
-// ADDED IN 09-BW-Sphere
-let sphere = null;
-let numMeshIndices = 0;
-let buffer_position = null;
-let buffer_normal = null;
-let buffer_texcoord = null;
-let buffer_element = null;
 
-// Added in 11 Three Moving light on statuc sphere 
-var lightAmbient = new Float32Array(
-    [
-        0.0, 0.0, 0.0, 1.0, // light[0] ambient
-        0.0, 0.0, 0.0, 1.0, // light[1] ambient
-        0.0, 0.0, 0.0, 1.0  // light[2] ambient
-    ]
-);
-var lightDiffuse = new Float32Array(
-    [
-        1.0, 0.0, 0.0, 1.0, // light[0] diffuse Red Light
-        0.0, 1.0, 0.0, 1.0, // light[1] diffuse Green Light
-        0.0, 0.0, 1.0, 1.0  // light[2] diffuse Blue Light
-    ]);
-var lightSpecular = new Float32Array(
-    [
-        1.0, 0.0, 0.0, 1.0, // light[0] specular Red Light
-        0.0, 1.0, 0.0, 1.0, // light[1] specular Green Light
-        0.0, 0.0, 1.0, 1.0  // light[2] specular Blue Light
-    ]
-);
-var lightPosition = new Float32Array(
-    [
-        0.0, 0.0, 5.0, 1.0, // light[0] position YZ plane
-        0.0, 0.0, 5.0, 1.0, // light[1] position XZ plane
-        0.0, 5.0, 0.0, 1.0  // light[2] position XY plane
-
-    ]
-);
+//Added in 10-Light-Per-Vertex
+var lightAmbient = new Float32Array([0.1, 0.1, 0.1, 0.0]);
+var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var lightPosition = new Float32Array([100.0, 100.0, 100.0, 1.0]);
 
 var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
 var materialDiffuse = new Float32Array([0.5, 0.2, 0.7, 0.0]);
 var materialSpecular = new Float32Array([0.7, 0.7, 0.7, 0.0]);
 var materialShininess = new Float32Array([128.0, 0.0, 0.0, 0.0]);
-var lightAngleZero = 0.0;
-var lightAngleOne = 0.0;
-var lightAngleTwo = 0.0;
 var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
 
 var isLightingEnabled = false;
@@ -247,25 +219,23 @@ function initialize() {
         "{" +
         "modelMatrix : mat4x4<f32>," +
         "viewMatrix : mat4x4<f32>," +
-        "projectionMatrix   : mat4x4<f32>," +
-        "lightAmbient       : array< vec4<f32>, 3 >," +
-        "lightDiffuse       : array< vec4<f32>, 3 >," +
-        "lightSpecular      : array< vec4<f32>, 3 >," +
-        "lightPosition      : array< vec4<f32>, 3 >," +
-        "materialAmbient    : vec4<f32>," +
-        "materialDiffuse    : vec4<f32>," +
-        "materialSpecular   : vec4<f32>," +
-        "materialShininess  : vec4<f32>," +
+        "projectionMatrix : mat4x4<f32>," +
+        "lightAmbient : vec4<f32>," +
+        "lightDiffuse : vec4<f32>," +
+        "lightSpecular : vec4<f32>," +
+        "lightPosition : vec4<f32>," +
+        "materialAmbient : vec4<f32>," +
+        "materialDiffuse : vec4<f32>," +
+        "materialSpecular : vec4<f32>," +
+        "materialShininess : vec4<f32>," +
         "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
         "@builtin(position) position: vec4<f32>," +
         "@location(0) transformedNormal:vec3<f32>," +
-        "@location(1) viewerVector:vec3<f32>," +
-        "@location(2) lightDirectionZero:vec3<f32>," +
-        "@location(3) lightDirectionOne:vec3<f32>," +
-        "@location(4) lightDirectionTwo:vec3<f32>" +
+        "@location(1) lightDirection:vec3<f32>," +
+        "@location(2) viewerVector:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@vertex" + // vertex shader entry point and shader type
@@ -279,9 +249,7 @@ function initialize() {
         "let modelViewMatrix: mat3x3<f32> = mat3FromMat4( uMyUniformData.viewMatrix * uMyUniformData.modelMatrix );" +
         "let normalMatrix: mat3x3<f32> = transpose(inverse3x3(modelViewMatrix));" +
         "output.transformedNormal =  normalize(normalMatrix * vNormal);" +
-        "output.lightDirectionZero = uMyUniformData.lightPosition[0].xyz - eyeCoordinates.xyz;" +
-        "output.lightDirectionOne  = uMyUniformData.lightPosition[1].xyz - eyeCoordinates.xyz;" +
-        "output.lightDirectionTwo  = uMyUniformData.lightPosition[2].xyz - eyeCoordinates.xyz;" +
+        "output.lightDirection = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
         "output.viewerVector = normalize(-eyeCoordinates.xyz);" +
         "}" +
         "output.position = uMyUniformData.projectionMatrix * uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
@@ -344,29 +312,27 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
-       "struct MyUniformData" +
+        "struct MyUniformData" +
         "{" +
-            "modelMatrix : mat4x4<f32>," +
-            "viewMatrix : mat4x4<f32>," +
-            "projectionMatrix   : mat4x4<f32>," +
-            "lightAmbient       : array< vec4<f32>, 3 >," +
-            "lightDiffuse       : array< vec4<f32>, 3 >," +
-            "lightSpecular      : array< vec4<f32>, 3 >," +
-            "lightPosition      : array< vec4<f32>, 3 >," +
-            "materialAmbient    : vec4<f32>," +
-            "materialDiffuse    : vec4<f32>," +
-            "materialSpecular   : vec4<f32>," +
-            "materialShininess  : vec4<f32>," +
-            "lKeyisPressed : vec4<u32>" +
+        "modelMatrix : mat4x4<f32>," +
+        "viewMatrix : mat4x4<f32>," +
+        "projectionMatrix : mat4x4<f32>," +
+        "lightAmbient : vec4<f32>," +
+        "lightDiffuse : vec4<f32>," +
+        "lightSpecular : vec4<f32>," +
+        "lightPosition : vec4<f32>," +
+        "materialAmbient : vec4<f32>," +
+        "materialDiffuse : vec4<f32>," +
+        "materialSpecular : vec4<f32>," +
+        "materialShininess : vec4<f32>," +
+        "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
-            "@builtin(position) position: vec4<f32>," +
-            "@location(0) transformedNormal:vec3<f32>," +
-            "@location(1) viewerVector:vec3<f32>," +
-            "@location(2) lightDirectionZero:vec3<f32>," +
-            "@location(3) lightDirectionOne:vec3<f32>," +
-            "@location(4) lightDirectionTwo:vec3<f32>" +
+        "@builtin(position) position: vec4<f32>," +
+        "@location(0) transformedNormal:vec3<f32>," +
+        "@location(1) lightDirection:vec3<f32>," +
+        "@location(2) viewerVector:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@fragment" + // vertex shader entry point and shader type
@@ -376,27 +342,18 @@ function initialize() {
         "var phong_ads_color : vec3<f32>;" +
         "if(uMyUniformData.lKeyisPressed.x == 1u)" +
         "{" +
-            "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
-             
-            "var lightDirections : array< vec3<f32>, 3>;" +
-            "lightDirections[0] = normalize(output.lightDirectionZero);" +
-            "lightDirections[1] = normalize(output.lightDirectionOne);" +
-            "lightDirections[2] = normalize(output.lightDirectionTwo);" +
-            "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
-            "phong_ads_color    = vec3<f32>(0.0,0.0,0.0);" +
-            "for(var i : u32 = 0u; i < 3u; i = i + 1u)" +
-            "{" +
-                "let normalized_lightDirection : vec3<f32> = normalize(lightDirections[i]);" +
-                "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
-                "let ambient  : vec3<f32>  =  uMyUniformData.lightAmbient[i].xyz * uMyUniformData.materialAmbient.xyz;" +
-                "let diffuse  : vec3<f32>  =  uMyUniformData.lightDiffuse[i].xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0);" +
-                "let specular : vec3<f32>  =  uMyUniformData.lightSpecular[i].xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
-                "phong_ads_color = phong_ads_color + ambient + diffuse + specular;" +
-            "}" +            
+        "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
+        "let normalized_lightDirection : vec3<f32> = normalize(output.lightDirection);" +
+        "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
+        "let ambient : vec3<f32> = uMyUniformData.lightAmbient.xyz * uMyUniformData.materialAmbient.xyz;" +
+        "let diffuse : vec3<f32> = uMyUniformData.lightDiffuse.xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0);" +
+        "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
+        "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
+        "phong_ads_color = ambient + diffuse + specular;" +
         "}" +
         "else" +
         "{" +
-          "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
         "}" +
         "return  vec4<f32>(phong_ads_color,1.0);" +
         "}";
