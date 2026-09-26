@@ -40,19 +40,27 @@ let bindingGroup_texutre_and_sampler = null;
 var angleCube = 0.0;
 
 
+// ADDED IN 09-BW-Sphere
+// let sphere = null;
+// let numMeshIndices = 0;
+// let buffer_position = null;
+// let buffer_normal = null;
+// let buffer_texcoord = null;
+// let buffer_element = null;
+
 //Added in 10-Light-Per-Vertex
 var lightAmbient = new Float32Array([0.1, 0.1, 0.1, 0.0]);
 var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
 var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
-var lightPosition = new Float32Array([100.0, 100.0, 100.0, 1.0]);
+var lightPosition = new Float32Array([0.0, 0.0, 2.0, 1.0]);
 
 var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
 var materialDiffuse = new Float32Array([0.5, 0.2, 0.7, 0.0]);
 var materialSpecular = new Float32Array([0.7, 0.7, 0.7, 0.0]);
 var materialShininess = new Float32Array([128.0, 0.0, 0.0, 0.0]);
-var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
+// var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
 
-var isLightingEnabled = false;
+// var isLightingEnabled = false;
 
 
 
@@ -129,7 +137,8 @@ async function main(params) {
     device.lost.then(onDeviceLost);
 
     // call stub functions from here  
-    initialize();
+
+    await initialize();
     resize();
     display();
 
@@ -183,7 +192,7 @@ function onFullScreenChange() {
     resize();
 }
 
-function initialize() {
+async function initialize() {
 
     queue = device.queue;
 
@@ -228,31 +237,32 @@ function initialize() {
         "materialDiffuse : vec4<f32>," +
         "materialSpecular : vec4<f32>," +
         "materialShininess : vec4<f32>," +
-        "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
         "@builtin(position) position: vec4<f32>," +
-        "@location(0) transformedNormal:vec3<f32>," +
-        "@location(1) lightDirection:vec3<f32>," +
-        "@location(2) viewerVector:vec3<f32>" +
+        "@location(0) color:vec3<f32>," +
+        "@location(1) texCoord:vec2<f32>," +
+        "@location(2) transformedNormal:vec3<f32>," +
+        "@location(3) lightDirection:vec3<f32>," +
+        "@location(4) viewerVector:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@vertex" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(@location(0) vPos : vec3<f32>,@location(1) vNormal : vec3<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "fn main(@location(0) vPos : vec3<f32>,@location(1) col : vec3<f32>,@location(2) vNormal : vec3<f32>,@location(3) texcoord : vec2<f32> ) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
         "{" +
         "var output : VertexOutput;" +
-        "if(uMyUniformData.lKeyisPressed.x == 1u)" + // WGSL is strictyl typed with no implicit type conversion or promotion so we have to use 1u for unsigned int 1
-        "{" +
+
         "let eyeCoordinates : vec4<f32> = uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
         "let modelViewMatrix: mat3x3<f32> = mat3FromMat4( uMyUniformData.viewMatrix * uMyUniformData.modelMatrix );" +
         "let normalMatrix: mat3x3<f32> = transpose(inverse3x3(modelViewMatrix));" +
         "output.transformedNormal =  normalize(normalMatrix * vNormal);" +
         "output.lightDirection = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
         "output.viewerVector = normalize(-eyeCoordinates.xyz);" +
-        "}" +
         "output.position = uMyUniformData.projectionMatrix * uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
+        "output.color = col;" +
+        "output.texCoord = texcoord;" +
         "return output;" +
         "}" +
         "fn mat3FromMat4(m:mat4x4<f32>)->mat3x3<f32>" +
@@ -312,6 +322,7 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
+
         "struct MyUniformData" +
         "{" +
         "modelMatrix : mat4x4<f32>," +
@@ -325,23 +336,24 @@ function initialize() {
         "materialDiffuse : vec4<f32>," +
         "materialSpecular : vec4<f32>," +
         "materialShininess : vec4<f32>," +
-        "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
         "@builtin(position) position: vec4<f32>," +
-        "@location(0) transformedNormal:vec3<f32>," +
-        "@location(1) lightDirection:vec3<f32>," +
-        "@location(2) viewerVector:vec3<f32>" +
+        "@location(0) color:vec3<f32>," +
+        "@location(1) texCoord:vec2<f32>," +
+        "@location(2) transformedNormal:vec3<f32>," +
+        "@location(3) lightDirection:vec3<f32>," +
+        "@location(4) viewerVector:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
+        "@group(1) @binding(0) var myTexture2D: texture_2d<f32>;" +
+        "@group(1) @binding(1) var mySampler: sampler;" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
         "fn main(output: VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
         "var phong_ads_color : vec3<f32>;" +
-        "if(uMyUniformData.lKeyisPressed.x == 1u)" +
-        "{" +
         "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
         "let normalized_lightDirection : vec3<f32> = normalize(output.lightDirection);" +
         "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
@@ -350,12 +362,9 @@ function initialize() {
         "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
         "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
         "phong_ads_color = ambient + diffuse + specular;" +
-        "}" +
-        "else" +
-        "{" +
-        "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
-        "}" +
-        "return  vec4<f32>(phong_ads_color,1.0);" +
+        "var text = textureSample(myTexture2D, mySampler, output.texCoord);" +
+        "var color = text * vec4<f32>(output.color,1.0) * vec4<f32>(phong_ads_color,1.0);" +
+        "return  color;" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
@@ -376,18 +385,58 @@ function initialize() {
     }
 
 
+    const cube_pcnt = new Float32Array([
+        // position            color             normal            texcoord
+        // top surface
+        1.0, 1.0, -1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+        -1.0, 1.0, -1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
+        -1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0,
+        -1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+        1.0, 1.0, -1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+        // bottom surface
+        1.0, -1.0, 1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+        -1.0, -1.0, 1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0,
+        -1.0, -1.0, -1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 1.0, 1.0,
+        -1.0, -1.0, -1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 1.0, 1.0,
+        1.0, -1.0, -1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0,
+        1.0, -1.0, 1.0, 1.0, 0.5, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+        // front surface
+        1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+        -1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+        -1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0,
+        -1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0,
+        1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0,
+        1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+        // back surface
+        1.0, -1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0,
+        -1.0, -1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0,
+        -1.0, 1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 1.0,
+        -1.0, 1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 1.0,
+        1.0, 1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0,
+        1.0, -1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0,
+        // left surface
+        -1.0, 1.0, 1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0,
+        -1.0, 1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 1.0, 0.0,
+        -1.0, -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 1.0, 1.0,
+        -1.0, -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 1.0, 1.0,
+        -1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, 1.0,
+        -1.0, 1.0, 1.0, 0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0,
+        // right surface
+        1.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+        1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0,
+        1.0, -1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+        1.0, -1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+        1.0, -1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+        1.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0
+    ]);
 
-    sphere = new Mesh();
-    makeSphere(sphere, 2.0, 30, 30);
-    numMeshIndices = sphere.getIndexCount();
-    console.log("Sphere Geometrty = Vertex Count = ", sphere.getVertexCount(), "Index Count = ", numMeshIndices, "\n");
 
-    const meshData = sphere.getMeshData();
 
-    //create Vertex Buffer for position, normal, texcoord and element array buffer for indices
-    buffer_position = createVertexBuffer(meshData.verticesArray);
+    //vertex buffer for above interleaved array
+    buffer_interleaved = createVertexBuffer(cube_pcnt);
 
-    if (buffer_position == null) {
+    if (buffer_interleaved == null) {
         console.log("Failed to create vertex buffer for position \n");
         throw Error("Failed to create vertex buffer for position \n");
     } else {
@@ -395,29 +444,89 @@ function initialize() {
     }
 
 
-    buffer_normal = createVertexBuffer(meshData.normalsArray);
-    if (buffer_normal == null) {
-        console.log("Failed to create vertex buffer for normal \n");
-        throw Error("Failed to create vertex buffer for normal \n");
+    // buffer_normal = createVertexBuffer(meshData.normalsArray);
+    // if (buffer_normal == null) {
+    //     console.log("Failed to create vertex buffer for normal \n");
+    //     throw Error("Failed to create vertex buffer for normal \n");
+    // } else {
+    //     console.log("Vertex buffer for normal is created successfully \n");
+    // }
+
+    // buffer_texcoord = createVertexBuffer(meshData.texCoordsArray);
+    // if (buffer_texcoord == null) {
+    //     console.log("Failed to create vertex buffer for texcoord \n");
+    //     throw Error("Failed to create vertex buffer for texcoord \n");
+    // } else {
+    //     console.log("Vertex buffer for texcoord is created successfully \n");
+    // }
+
+    // buffer_element = createIndexBuffer(meshData.indicesArray);
+    // if (buffer_element == null) {
+    //     console.log("Failed to create index buffer for element \n");
+    //     throw Error("Failed to create index buffer for element \n");
+    // } else {
+    //     console.log("Index buffer for element is created successfully \n");
+    // }
+
+
+
+    const myUniformBufferSize = Float32Array.BYTES_PER_ELEMENT * 16 * 3 +
+        Float32Array.BYTES_PER_ELEMENT * 4 * 8;
+
+    buffer_uniform = createUniformBuffer(myUniformBufferSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+
+
+    // d. Create bind group for uniform buffer. GPUBindGroup
+    // ## Will set this binding group in display.
+
+
+
+
+    texture_marble = await loadTexture('marble.png');
+    if (texture_marble == null) {
+        console.log("Failed to load texture image \n");
+        throw Error("Failed to load texture image \n");
     } else {
-        console.log("Vertex buffer for normal is created successfully \n");
+        console.log("load texture image created successfully \n");
     }
 
-    buffer_texcoord = createVertexBuffer(meshData.texCoordsArray);
-    if (buffer_texcoord == null) {
-        console.log("Failed to create vertex buffer for texcoord \n");
-        throw Error("Failed to create vertex buffer for texcoord \n");
+
+    //texture sampler descriptor
+    const samplerDescriptor = {
+        magFilter: "linear",
+        minFilter: "linear",
+    };
+
+    //create texture sampler
+    sampler_marble = device.createSampler(samplerDescriptor);
+    if (sampler_marble == null) {
+        console.log("Failed to Create texture sampler \n");
+        throw Error("Failed to Create texture sampler \n");
     } else {
-        console.log("Vertex buffer for texcoord is created successfully \n");
+        console.log(" Texture sampler created successfully \n");
     }
 
-    buffer_element = createIndexBuffer(meshData.indicesArray);
-    if (buffer_element == null) {
-        console.log("Failed to create index buffer for element \n");
-        throw Error("Failed to create index buffer for element \n");
-    } else {
-        console.log("Index buffer for element is created successfully \n");
-    }
+
+    const bindGrouplayout_texture_and_sampler = createBindLayoutForTexutreAndSampler(
+        "float",
+        "2d",
+        false,
+        0, //texture binding index this relate to fragment shade
+        GPUShaderStage.FRAGMENT,
+        "filtering",
+        1,
+        GPUShaderStage.FRAGMENT,
+    );
+
+    //create texture and sampler bind group
+
+    bindingGroup_texutre_and_sampler = createBindGroupForTextureAndSampler(
+        0,
+        texture_marble,
+        1,
+        sampler_marble,
+        bindGrouplayout_texture_and_sampler
+    );
 
 
     // 5.Now will do uniform plumbing for MVP Uniform
@@ -429,10 +538,12 @@ function initialize() {
         "uniform"
     );
 
+    bindingGroup_uniform = createBindGroupForUniform(buffer_uniform, 0, myUniformBufferSize, 0, bindGroupLayout_uniform);
+
     // 5->B. Create pipeline Layout  to specify  one  or many above  bind  groups layout.
     //a. first we will create pipeline layout descriptor. GPUPipelineLayoutDescriptor then
     const pipelineLayoutDescriptor = {
-        bindGroupLayouts: [bindGroupLayout_uniform]
+        bindGroupLayouts: [bindGroupLayout_uniform, bindGrouplayout_texture_and_sampler]
     };
 
     // b. Create pipeline layout. GPUPipelineLayout
@@ -446,67 +557,62 @@ function initialize() {
     }
 
 
-    // 5->C. Now  create uniform buffer for our uniform buffer
-    // a. Create uniform buffer descriptor. GPUBufferDescriptor
-    const myUniformBufferSize = Float32Array.BYTES_PER_ELEMENT * 16 + // model matrix
-        Float32Array.BYTES_PER_ELEMENT * 16 + // from 64th byte offset to 128th byte offset is view matrix
-        Float32Array.BYTES_PER_ELEMENT * 16 + // from 128th byte offset to 192th byte offset is projection matrix
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 192th byte offset to 207th byte offset is light ambient
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 208th byte offset to 223th byte offset is light diffuse
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 224th byte offset to 239th byte offset is light specular
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 240th byte offset to 255th byte offset is light position
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 256th byte offset to 271th byte offset is material ambient
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 272th byte offset to 287th byte offset is material diffuse
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 288th byte offset to 303th byte offset is material specular
-        Float32Array.BYTES_PER_ELEMENT * 4 + // from 304th byte offset to 319th byte offset is material shininess
-        Uint32Array.BYTES_PER_ELEMENT * 4; // from 320th byte offset to 335th byte offset is lKeyPressed
 
-
-
-    buffer_uniform = createUniformBuffer(myUniformBufferSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
-
-
-    // d. Create bind group for uniform buffer. GPUBindGroup
-    // ## Will set this binding group in display.
-
-    bindingGroup_uniform = createBindGroupForUniform(buffer_uniform, 0, myUniformBufferSize, 0, bindGroupLayout_uniform);
-
+    //Interleaved Buffer Attributes [PCNT]
 
     // 6   we will create PSO (Pipeline State Object) now we are going to create what is needed for PSO (Pipeline State Object) 
     // A Create render pipeline descriptor. GPURenderPipelineDescriptor
     // a. we need to vertex buffer layout descriptor. GPUVertexBufferLayoutDescriptor for that we need to create vertex attribute  
     // i. Create vertex attribute for position . GPUVertexAttribute 
     const positionVertexAttribute = {
-        offset: 0, // this is the offset in the buffer where the attribute data starts
         shaderLocation: 0, // this matches with @location(0) in vertex shader
+        offset: 0, // this is the offset in the buffer where the attribute data starts        
         format: "float32x3" // this is the format of the attribute data
     };
 
+    const colorVertexAttribute = {
+        shaderLocation: 1,
+        offset: Float32Array.BYTES_PER_ELEMENT * 3, // color start here from 12th 
+        format: "float32x3" // this is the format of the attribute data
+    }
+
+    const normalVertexAttribute = {
+        shaderLocation: 2,
+        offset: Float32Array.BYTES_PER_ELEMENT * 6, // Normal starts here
+        format: "float32x3"
+    };
+
+    const texCoordVertexAttribute = {
+        shaderLocation: 3,
+        offset: Float32Array.BYTES_PER_ELEMENT * 9, // Teexcoord starts here in our PCNT arrauve cube_pcnt
+        format: "float32x2"
+    };
+
     // ii. Create gpu vertex buffer laout using above gpu vertex attribute. GPUVertexBufferLayout
-    const positionVertexBufferLayout = {
-        attributes: [positionVertexAttribute], // this is the array of attributes for the vertex buffer
-        arrayStride: Float32Array.BYTES_PER_ELEMENT * 3, // this is the size of one vertex in bytes (4 floats * 4 bytes per float)       
+    const interleavedVertexBufferLayout = {
+        attributes: [
+            positionVertexAttribute,
+            colorVertexAttribute,
+            normalVertexAttribute,
+            texCoordVertexAttribute], // this is the array of attributes for the vertex buffer
+        arrayStride: Float32Array.BYTES_PER_ELEMENT * 11, // we are jumping by 44 byte offset
         stepMode: "vertex" // this means that the vertex buffer will be jumped to the next vertex for each vertex shader invocation //jump vertex by vertex not instance by instance
     };
 
     //=================== Vertex Buffer Layout is created successfully ===================
-    const normalVertexAttribute = {
-        shaderLocation: 1,
-        offset: 0,
-        format: "float32x3"
-    };
 
-    const normalVeretexBufferLayout = {
-        attributes: [normalVertexAttribute],
-        arrayStride: Float32Array.BYTES_PER_ELEMENT * 3,
-        stemMode: "vertex"
-    };
+
+    // const normalVeretexBufferLayout = {
+    //     attributes: [normalVertexAttribute],
+    //     arrayStride: Float32Array.BYTES_PER_ELEMENT * 3,
+    //     stemMode: "vertex"
+    // };
 
     //b. Create vertex shader state . GPUVertexState
     const vertexShadeState = {
         module: shaderModule_vertexShader, // this is the vertex shader module that we created earlier
         entryPoint: "main", // this is the entry point of the vertex shader
-        buffers: [positionVertexBufferLayout, normalVeretexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
+        buffers: [interleavedVertexBufferLayout] // this is the array of vertex buffer layouts that we created earlier
     };
 
     //=================== Vertex Shader State is created successfully ===================
@@ -674,20 +780,30 @@ function display() {
     //  A.  Create and initialize required matrices here  we need  model  view  matrix  and model view projection matrix
     const modelMatrix = mat4.create();
     const viewMatrix = mat4.create();
-    // const modelViewProjectionMatrix = mat4.create();
+    const projectionMatrix = mat4.create();
+    let rotationMatrix = mat4.create();
+    const scaleMatrix = mat4.create();
+    const rotationMatrixX = mat4.create();
+    const rotationMatrixY = mat4.create();
+    const rotationMatrixZ = mat4.create();
+
+
     //B.  Do  needed  transformations here  we do  only translation.
     // first param is target matrix, second param is source matrix, third param is translation vector
-    mat4.translate(modelMatrix, modelMatrix, [0.0, 0.0, -6.0]); //translate the modelview matrix by -4 units in z direction
+    mat4.translate(modelMatrix, modelMatrix, [0.0, 0.0, -4.0]); //translate the modelview matrix by -4 units in z direction
+    mat4.scale(scaleMatrix, scaleMatrix, [0.75, 0.75, 0.75]);
+    mat4.rotateX(rotationMatrixX, rotationMatrixX, degToRad(angleCube));
+    mat4.rotateY(rotationMatrixY, rotationMatrixY, degToRad(angleCube));
+    mat4.rotateZ(rotationMatrixZ, rotationMatrixZ, degToRad(angleCube));
+    mat4.multiply(rotationMatrix, rotationMatrixX, rotationMatrixY);
+    mat4.multiply(rotationMatrix, rotationMatrix, rotationMatrixZ);
+    mat4.multiply(modelMatrix, modelMatrix, rotationMatrix);
 
     //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
     // mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelMatrix);
 
     //toggle lighting
-    if (isLightingEnabled == true) {
-        lKeyPressed[0] = 1;
-    } else {
-        lKeyPressed[0] = 0;
-    }
+
 
     // Now write all the uniform data to the uniform buffer we created in above 5-> C step.
     // 12 writebuffer() call to fill  the one unified buffer  targeting individual byte offsets as we saw while initializing
@@ -773,13 +889,6 @@ function display() {
     );
 
 
-    // 4: Light Toggle 
-    queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 8,
-        lKeyPressed,
-        0,
-        lKeyPressed.length
-    );
 
 
 
@@ -827,11 +936,8 @@ function display() {
     // vertex buffer is the buffer that contains the vertex data for our scene.
     // 1. first parameter is the slot number of the vertex buffer,
     // 2. second parameter is the vertex buffer that we want to set
-    renderPassEncoder.setVertexBuffer(0, buffer_position);
-    renderPassEncoder.setIndexBuffer(buffer_element, "uint16");
-
-    //for normal 
-    renderPassEncoder.setVertexBuffer(1, buffer_normal);
+    renderPassEncoder.setVertexBuffer(0, buffer_interleaved);
+    // renderPassEncoder.setIndexBuffer(buffer_element, "uint16");
 
 
     //e. set bind group
@@ -839,11 +945,13 @@ function display() {
     // 1. first parameter is the slot number of the bind group,
     // 2. second parameter is the bind group that we want to set
     renderPassEncoder.setBindGroup(0, bindingGroup_uniform);
+    renderPassEncoder.setBindGroup(1, bindingGroup_texutre_and_sampler);
+
 
     //4. Draw the triangle
     // 1. first parameter is the number of vertices to draw
     // renderPassEncoder.draw(3);
-    renderPassEncoder.drawIndexed(numMeshIndices);
+    renderPassEncoder.draw(36);
 
     //end the render pass
     renderPassEncoder.end();
@@ -852,13 +960,17 @@ function display() {
     const commandBuffer = commandEncoder.finish();
     queue.submit([commandBuffer]);
 
+    update();
 
     animationFrameId = requestAnimationFrame(display);
 
 }
 
 function update() {
-
+    angleCube = angleCube + 1;
+    if (angleCube >= 360) {
+        angleCube = angleCube - 360;
+    }
 }
 
 
@@ -874,16 +986,6 @@ function keyDown(event) {
         case "F":
             toggleFullScreen();
             break;
-
-        case "L":
-        case "l":
-            if (isLightingEnabled == false) {
-                isLightingEnabled = true;
-            } else {
-                isLightingEnabled = false;
-            }
-            break;
-
         default:
             break;
     }
@@ -1003,25 +1105,6 @@ function createVertexBuffer(_vertexData) {
     return buffer;
 }
 
-//create index buffer UDF
-function createIndexBuffer(_indexData) {
-
-    //code 
-    const bufferDescriptor = {
-        size: _indexData.byteLength,
-        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-    };
-
-    const buffer = device.createBuffer(bufferDescriptor);
-
-    if (buffer == null) {
-        return null;
-    }
-
-    queue.writeBuffer(buffer, 0, _indexData, 0, _indexData.length);
-    return buffer;
-}
-
 function onDeviceLost(info) {
     console.warn("WebGPU  device lost  reason:", info.reason, "Message:", info.message);
     device = null;
@@ -1031,12 +1114,16 @@ function onDeviceLost(info) {
     bindingGroup_uniform = null;
     perspectiveProjectionMatrix = null;
     depthTexture = null;
-    sphere = null;
-    numMeshIndices = 0;
-    buffer_position = null;
-    buffer_normal = null;
-    buffer_texcoord = null;
-    buffer_element = null;
+    // sphere = null;
+    // numMeshIndices = 0;
+    // buffer_position = null;
+    // buffer_normal = null;
+    // buffer_texcoord = null;
+    // buffer_element = null;
+    buffer_interleaved = null;
+    texture_marble = null;
+    sampler_marble = null;
+    bindingGroup_texutre_and_sampler = null;
 }
 
 function uninitialize() {
@@ -1046,6 +1133,11 @@ function uninitialize() {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
+    if (texture_marble != null) {
+        texture_marble.destroy();
+        texture_marble = null;
+    }
+
 
     //destroy depth texure
     if (depthTexture != null) {
@@ -1066,16 +1158,158 @@ function uninitialize() {
         render_pipeline = null;
         buffer_uniform = null;
         bindingGroup_uniform = null;
+        buffer_interleaved = null;
+        sampler_marble = null;
+        bindingGroup_texutre_and_sampler = null;
 
-        buffer_position = null;
-        buffer_normal = null;
-        buffer_texcoord = null;
-        buffer_element = null;
+        // buffer_position = null;
+        // buffer_normal = null;
+        // buffer_texcoord = null;
+        // buffer_element = null;
     }
 
-    sphere = null;
+    // sphere = null;
 
     perspectiveProjectionMatrix = null;
 
     console.log("Uninitialize is successfull.");
+}
+
+async function loadTexture(_imageFileName) {
+
+    const image = new Image();
+    image.src = _imageFileName;
+    await image.decode();
+    const imageBitmap = await createImageBitmap(image);
+    if (imageBitmap == null) {
+        throw Error('createImageBitmap faild ')
+    }
+
+    //now create texture descriptor based on above imageBitmap
+    const textureDescriptor = {
+        size: [imageBitmap.width, imageBitmap.height, 1],
+        dimension: "2d",
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+    };
+
+    const _texture = device.createTexture(textureDescriptor);
+    if (_texture == null) {
+        console.log("Failed to create _texture \n");
+        throw Error("Failed to create _texture \n");
+    } else {
+        console.log("_texture created successfully \n");
+    }
+
+    const copySource = {
+        source: imageBitmap,
+        flipY: true
+    };
+
+    const copyDestination = {
+        texture: _texture,
+        mipLevel: 0
+    };
+
+    queue.copyExternalImageToTexture(copySource, copyDestination, textureDescriptor.size);
+
+    return _texture;
+}
+
+function createBindLayoutForTexutreAndSampler(
+    _textureSampleType,
+    _textureViewDimension,
+    _isTextureMultiSampled,
+    _textureBindingIndex,
+    _textureShadeStageVisbility,
+    _samplerType,
+    _samplerBindingIndex,
+    _samplerShaderStageVsibility
+) {
+
+    //code 
+    //create binding layout
+    const bindingLayout_texture = {
+        sampleType: _textureSampleType,
+        viewDimension: _textureViewDimension,
+        multisampled: _isTextureMultiSampled
+    };
+
+    //now create bind group layout entry
+    const bindGroupLayoutEntry_texture = {
+        binding: _textureBindingIndex,
+        visibility: _textureShadeStageVisbility,
+        texture: bindingLayout_texture
+    };
+
+    //now create binding layout for sampler 
+    const bindingLayout_sampler = {
+        type: _samplerType
+    };
+
+    //now sampler bind group layout entry
+    const bindGroupLayoutEntry_sampler = {
+        binding: _samplerBindingIndex,
+        visibility: _samplerShaderStageVsibility,
+        sampler: bindingLayout_sampler
+    };
+
+    //now create bind group layout descriptor
+    const bindGroupLayoutDescriptor = {
+        entries: [bindGroupLayoutEntry_texture, bindGroupLayoutEntry_sampler],
+    };
+
+    //now create actual bind group layout 
+    const bindgroupLayout = device.createBindGroupLayout(bindGroupLayoutDescriptor);
+    if (bindgroupLayout == null) {
+        console.log("Failed to create bindgroupLayout \n");
+        throw Error("Failed to create bindgroupLayout \n");
+    } else {
+        console.log("bindgroupLayout created successfully \n");
+    }
+
+    return bindgroupLayout;
+
+}
+
+function createBindGroupForTextureAndSampler(
+    _textureBindingIndex,
+    _texture,
+    _samplerBindingIndex,
+    _sampler,
+    _bindGroupLayout
+) {
+    //code 
+    // create Bind grpup entry for texture
+    const bindGroupEntry_texture = {
+        binding: _textureBindingIndex,
+        resource: _texture.createView(),
+    };
+
+    //create bind group entry for sampler
+    const bindGroupEntry_sampler = {
+        binding: _samplerBindingIndex,
+        resource: _sampler
+    }
+
+    //now create bind group descriptor for texture and sampler
+    const bindGroupDescriptor = {
+        layout: _bindGroupLayout,
+        entries: [bindGroupEntry_texture, bindGroupEntry_sampler]
+    };
+
+    //now create the acatual bind group
+    const bindGroup = device.createBindGroup(bindGroupDescriptor);
+    if (bindGroup == null) {
+        console.log("Failed to create bindGroup \n");
+        throw Error("Failed to create bindGroup \n");
+    } else {
+        console.log("bindGroup created successfully \n");
+    }
+    return bindGroup;
+
+}
+
+function degToRad(degrees) {
+    return (degrees * Math.PI / 180);
 }

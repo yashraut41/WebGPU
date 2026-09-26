@@ -489,7 +489,7 @@ function initialize() {
     }
 
 
-    // 5->C. Now  create uniform buffer for our uniform buffer
+    // 5->C. Now  create uniform buffer for our uniform buffer 
     // a. Create uniform buffer descriptor. GPUBufferDescriptor
     const myUniformBufferSize = Float32Array.BYTES_PER_ELEMENT * 16 + // model matrix
         Float32Array.BYTES_PER_ELEMENT * 16 + // from 64th byte offset to 128th byte offset is view matrix
@@ -498,7 +498,7 @@ function initialize() {
         Float32Array.BYTES_PER_ELEMENT * 4 +  // from 208th byte offset to 223th byte offset is light diffuse
         Float32Array.BYTES_PER_ELEMENT * 4 +  // from 224th byte offset to 239th byte offset is light specular
         Float32Array.BYTES_PER_ELEMENT * 4 +  // from 240th byte offset to 255th byte offset is light position
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 256th byte offset to 271th byte offset is material ambient
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 256th byte offset to 271th byte offset is material ambient        
         Float32Array.BYTES_PER_ELEMENT * 4 +  // from 272th byte offset to 287th byte offset is material diffuse
         Float32Array.BYTES_PER_ELEMENT * 4 +  // from 288th byte offset to 303th byte offset is material specular
         Float32Array.BYTES_PER_ELEMENT * 4 + // from 304th byte offset to 319th byte offset is material shininess
