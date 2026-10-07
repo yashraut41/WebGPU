@@ -64,16 +64,18 @@ var lightSpecular = new Float32Array(
 );
 var lightPosition = new Float32Array(
     [
-        0.0, 0.0, 5.0, 1.0, // light[0] position YZ plane
-        0.0, 0.0, 5.0, 1.0, // light[1] position XZ plane
-        0.0, 5.0, 0.0, 1.0  // light[2] position XY plane
+        0.0, 0.0, 0.0, 0.0, // light[0] position YZ plane
+        0.0, 0.0, 0.0, 0.0, // light[1] position XZ plane
+        0.0, 0.0, 0.0, 0.0  // light[2] position XY plane
 
     ]
 );
 
 var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
 var materialDiffuse = new Float32Array([0.5, 0.2, 0.7, 0.0]);
+// var materialDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
 var materialSpecular = new Float32Array([0.7, 0.7, 0.7, 0.0]);
+// var materialSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
 var materialShininess = new Float32Array([128.0, 0.0, 0.0, 0.0]);
 var lightAngleZero = 0.0;
 var lightAngleOne = 0.0;
@@ -344,29 +346,29 @@ function initialize() {
 
     // fragment shader code in WGSL
     const fragmentShaderSourceCode =
-       "struct MyUniformData" +
+        "struct MyUniformData" +
         "{" +
-            "modelMatrix : mat4x4<f32>," +
-            "viewMatrix : mat4x4<f32>," +
-            "projectionMatrix   : mat4x4<f32>," +
-            "lightAmbient       : array< vec4<f32>, 3 >," +
-            "lightDiffuse       : array< vec4<f32>, 3 >," +
-            "lightSpecular      : array< vec4<f32>, 3 >," +
-            "lightPosition      : array< vec4<f32>, 3 >," +
-            "materialAmbient    : vec4<f32>," +
-            "materialDiffuse    : vec4<f32>," +
-            "materialSpecular   : vec4<f32>," +
-            "materialShininess  : vec4<f32>," +
-            "lKeyisPressed : vec4<u32>" +
+        "modelMatrix : mat4x4<f32>," +
+        "viewMatrix : mat4x4<f32>," +
+        "projectionMatrix   : mat4x4<f32>," +
+        "lightAmbient       : array< vec4<f32>, 3 >," +
+        "lightDiffuse       : array< vec4<f32>, 3 >," +
+        "lightSpecular      : array< vec4<f32>, 3 >," +
+        "lightPosition      : array< vec4<f32>, 3 >," +
+        "materialAmbient    : vec4<f32>," +
+        "materialDiffuse    : vec4<f32>," +
+        "materialSpecular   : vec4<f32>," +
+        "materialShininess  : vec4<f32>," +
+        "lKeyisPressed : vec4<u32>" +
         "};" +
         "struct VertexOutput" +
         "{" +
-            "@builtin(position) position: vec4<f32>," +
-            "@location(0) transformedNormal:vec3<f32>," +
-            "@location(1) viewerVector:vec3<f32>," +
-            "@location(2) lightDirectionZero:vec3<f32>," +
-            "@location(3) lightDirectionOne:vec3<f32>," +
-            "@location(4) lightDirectionTwo:vec3<f32>" +
+        "@builtin(position) position: vec4<f32>," +
+        "@location(0) transformedNormal:vec3<f32>," +
+        "@location(1) viewerVector:vec3<f32>," +
+        "@location(2) lightDirectionZero:vec3<f32>," +
+        "@location(3) lightDirectionOne:vec3<f32>," +
+        "@location(4) lightDirectionTwo:vec3<f32>" +
         "};" +
         "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
         "@fragment" + // vertex shader entry point and shader type
@@ -376,27 +378,27 @@ function initialize() {
         "var phong_ads_color : vec3<f32>;" +
         "if(uMyUniformData.lKeyisPressed.x == 1u)" +
         "{" +
-            "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
-             
-            "var lightDirections : array< vec3<f32>, 3>;" +
-            "lightDirections[0] = normalize(output.lightDirectionZero);" +
-            "lightDirections[1] = normalize(output.lightDirectionOne);" +
-            "lightDirections[2] = normalize(output.lightDirectionTwo);" +
-            "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
-            "phong_ads_color    = vec3<f32>(0.0,0.0,0.0);" +
-            "for(var i : u32 = 0u; i < 3u; i = i + 1u)" +
-            "{" +
-                "let normalized_lightDirection : vec3<f32> = normalize(lightDirections[i]);" +
-                "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
-                "let ambient  : vec3<f32>  =  uMyUniformData.lightAmbient[i].xyz * uMyUniformData.materialAmbient.xyz;" +
-                "let diffuse  : vec3<f32>  =  uMyUniformData.lightDiffuse[i].xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0);" +
-                "let specular : vec3<f32>  =  uMyUniformData.lightSpecular[i].xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
-                "phong_ads_color = phong_ads_color + ambient + diffuse + specular;" +
-            "}" +            
+        "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
+
+        "var lightDirections : array< vec3<f32>, 3>;" +
+        "lightDirections[0] = normalize(output.lightDirectionZero);" +
+        "lightDirections[1] = normalize(output.lightDirectionOne);" +
+        "lightDirections[2] = normalize(output.lightDirectionTwo);" +
+        "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
+        "phong_ads_color    = vec3<f32>(0.0,0.0,0.0);" +
+        "for(var i : u32 = 0u; i < 3u; i = i + 1u)" +
+        "{" +
+        "let normalized_lightDirection : vec3<f32> = normalize(lightDirections[i]);" +
+        "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
+        "let ambient  : vec3<f32>  =  uMyUniformData.lightAmbient[i].xyz * uMyUniformData.materialAmbient.xyz;" +
+        "let diffuse  : vec3<f32>  =  uMyUniformData.lightDiffuse[i].xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0);" +
+        "let specular : vec3<f32>  =  uMyUniformData.lightSpecular[i].xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
+        "phong_ads_color = phong_ads_color + ambient + diffuse + specular;" +
+        "}" +
         "}" +
         "else" +
         "{" +
-          "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
         "}" +
         "return  vec4<f32>(phong_ads_color,1.0);" +
         "}";
@@ -491,18 +493,34 @@ function initialize() {
 
     // 5->C. Now  create uniform buffer for our uniform buffer 
     // a. Create uniform buffer descriptor. GPUBufferDescriptor
-    const myUniformBufferSize = Float32Array.BYTES_PER_ELEMENT * 16 + // model matrix
-        Float32Array.BYTES_PER_ELEMENT * 16 + // from 64th byte offset to 128th byte offset is view matrix
-        Float32Array.BYTES_PER_ELEMENT * 16 + // from 128th byte offset to 192th byte offset is projection matrix
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 192th byte offset to 207th byte offset is light ambient
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 208th byte offset to 223th byte offset is light diffuse
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 224th byte offset to 239th byte offset is light specular
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 240th byte offset to 255th byte offset is light position
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 256th byte offset to 271th byte offset is material ambient        
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 272th byte offset to 287th byte offset is material diffuse
-        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 288th byte offset to 303th byte offset is material specular
-        Float32Array.BYTES_PER_ELEMENT * 4 + // from 304th byte offset to 319th byte offset is material shininess
-        Uint32Array.BYTES_PER_ELEMENT * 4; // from 320th byte offset to 335th byte offset is lKeyPressed
+    const myUniformBufferSize = Float32Array.BYTES_PER_ELEMENT * 16 + // from 0th byte offset to 63rd byte offset is model matrix
+        Float32Array.BYTES_PER_ELEMENT * 16 + // from 64th byte offset to 127th byte offset is view matrix
+        Float32Array.BYTES_PER_ELEMENT * 16 + // from 128th byte offset to 191st byte offset is projection matrix
+
+        // Light Zero
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 192nd byte offset to 207th byte offset is light zero ambient
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 208th byte offset to 223rd byte offset is light zero diffuse
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 224th byte offset to 239th byte offset is light zero specular
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 240th byte offset to 255th byte offset is light zero position
+
+        // Light One  
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 256th byte offset to 271st byte offset is light one ambient
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 272nd byte offset to 287th byte offset is light one diffuse
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 288th byte offset to 303rd byte offset is light one specular
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 304th byte offset to 319th byte offset is light one position
+
+        // Light Two 
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 320th byte offset to 335th byte offset is light two ambient
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 336th byte offset to 351st byte offset is light two diffuse
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 352nd byte offset to 367th byte offset is light two specular
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 368th byte offset to 383rd byte offset is light two position
+
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 384th byte offset to 399th byte offset is material ambient        
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 400th byte offset to 415th byte offset is material diffuse
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 416th byte offset to 431st byte offset is material specular
+        Float32Array.BYTES_PER_ELEMENT * 4 +  // from 432nd byte offset to 447th byte offset is material shininess
+        Uint32Array.BYTES_PER_ELEMENT * 4;   // from 448th byte offset to 463rd byte offset is lKeyPressed
+
 
 
 
@@ -722,12 +740,45 @@ function display() {
     // first param is target matrix, second param is source matrix, third param is translation vector
     mat4.translate(modelMatrix, modelMatrix, [0.0, 0.0, -6.0]); //translate the modelview matrix by -4 units in z direction
 
+
     //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
     // mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelMatrix);
 
     //toggle lighting
     if (isLightingEnabled == true) {
         lKeyPressed[0] = 1;
+        //light[0] =  Red ORBITING YZ plane rotate around X-Axis
+        lightPosition[0] = 0.0;
+        lightPosition[1] = 5.0 * Math.sin(degToRad(lightAngleZero));
+        lightPosition[2] = 5.0 * Math.cos(degToRad(lightAngleZero));
+        lightPosition[3] = 1.0;
+        lightAngleZero = lightAngleZero + 2.0;
+
+        if (lightAngleZero >= 360.0) {
+            lightAngleZero = lightAngleZero - 360.0;
+        }
+
+        //light[1] =  Green ORBITING XZ plane rotate around Y-Axis
+        lightPosition[4] = 5.0 * Math.cos(degToRad(lightAngleOne));
+        lightPosition[5] = 0.0; //height is  0 for XZ plane ORBITING
+        lightPosition[6] = 5.0 * Math.sin(degToRad(lightAngleOne));
+        lightPosition[7] = 1.0;
+        lightAngleOne = lightAngleOne + 2.0;
+
+        if (lightAngleOne >= 360.0) {
+            lightAngleOne = lightAngleOne - 360.0;
+        }
+
+        // light[2] = Blue ORBITING XY plane rotate around Z-Axis
+        lightPosition[8] = 5.0 * Math.cos(degToRad(lightAngleTwo));
+        lightPosition[9] = 5.0 * Math.sin(degToRad(lightAngleTwo));
+        lightPosition[10] = 0.0; // height is 0 for XY plane ORBITING
+        lightPosition[11] = 1.0;
+        lightAngleTwo = lightAngleTwo + 2.0;
+
+        if (lightAngleTwo >= 360.0) {
+            lightAngleTwo = lightAngleTwo - 360.0;
+        }
     } else {
         lKeyPressed[0] = 0;
     }
@@ -759,28 +810,29 @@ function display() {
 
     // 2 : light properties
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3, // 192th byte offset to 207th byte offset
+        Float32Array.BYTES_PER_ELEMENT *48, // 192th byte offset to 207th byte offset
         lightAmbient,
         0,
         lightAmbient.length
     );
 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 1, //208th byte offset to 223th byte offset
+        Float32Array.BYTES_PER_ELEMENT * 60,  // 
         lightDiffuse,
         0,
         lightDiffuse.length
     );
 
+
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 2,
+        Float32Array.BYTES_PER_ELEMENT *72,
         lightSpecular,
         0,
         lightSpecular.length
     );
 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 3,
+        Float32Array.BYTES_PER_ELEMENT * 84,
         lightPosition,
         0,
         lightPosition.length
@@ -788,28 +840,28 @@ function display() {
 
     //3: materials 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 4,
+        Float32Array.BYTES_PER_ELEMENT * 96,
         materialAmbient,
         0,
         materialAmbient.length
     );
 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 5,
+        Float32Array.BYTES_PER_ELEMENT * 100,
         materialDiffuse,
         0,
         materialDiffuse.length
     );
 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 6,///from 288th byte offset to 303th byte offset is material specular
+        Float32Array.BYTES_PER_ELEMENT * 104,
         materialSpecular,
         0,
         materialSpecular.length
     );
 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 7,// from 304th byte offset to 319th byte offset is material shininess
+        Float32Array.BYTES_PER_ELEMENT * 108,
         materialShininess,
         0,
         materialShininess.length
@@ -818,7 +870,7 @@ function display() {
 
     // 4: Light Toggle 
     queue.writeBuffer(buffer_uniform,
-        Float32Array.BYTES_PER_ELEMENT * 16 * 3 + Float32Array.BYTES_PER_ELEMENT * 4 * 8,
+        Float32Array.BYTES_PER_ELEMENT * 112,
         lKeyPressed,
         0,
         lKeyPressed.length
@@ -1121,4 +1173,9 @@ function uninitialize() {
     perspectiveProjectionMatrix = null;
 
     console.log("Uninitialize is successfull.");
+}
+
+function degToRad(degrees) {
+    //code
+    return degrees * Math.PI / 180.0;
 }
