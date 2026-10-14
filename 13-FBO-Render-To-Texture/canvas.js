@@ -1,10 +1,11 @@
 /**
  * @author Yashwant Raut
  * @email [example@mail.com]
- * @create date 2026-09-15 23:01:25
- * @modify date 2026-09-15 23:01:25
+ * @create date 2026-10-07 22:42:50
+ * @modify date 2026-10-07 22:42:50
  * @desc [description]
  */
+
 
 
 //global variables 
@@ -15,7 +16,7 @@ var canvas_original_width;
 var canvas_original_height;
 
 //webgpu  related 
-var clear_color
+var clear_color_fbo = null;
 
 let device = null;
 let context = null;
@@ -25,34 +26,70 @@ let animationFrameId = null;
 
 // Added in 02-Perspective_Triangle 
 
-let render_pipeline = null;
-let buffer_uniform = null;
-let bindingGroup_uniform = null;
+// let render_pipeline = null;
+// let buffer_uniform = null;
+// let bindingGroup_uniform = null;
 let perspectiveProjectionMatrix = null;
+let perspectiveProjectionMatrix_fbo = null;
 let depthTexture = null;
 
+//teapot related new declarations
+const FBO_WIDTH = 512;
+const FBO_HEIGHT = 512;
+let texture_teapot_color = null;
+let texture_teapot_depth = null;
+let texture_marble = null;
+let sampler_marble = null;
+let sampler_teapot = null;
 
-// ADDED IN 09-BW-Sphere
-let sphere = null;
-let numMeshIndices = 0;
-let buffer_position = null;
-let buffer_normal = null;
-let buffer_texcoord = null;
-let buffer_element = null;
+let render_pipeline_teapot = null;
+let buffer_uniform_teapot = null;
+let bindgroup_uniform_teapot = null;
+
+let bindgroup_marble_texture_and_sampler = null;
+let buffer_teapot_postion = null;
+let buffer_teapot_normal = null;
+let buffer_teapot_elements = null;
+let buffer_marble_texcoord = null;
+
+let numTeapotIndicies = 0;
+
+
+
+//CUBE RELATED DECLARATION ADDED IN 13-FBO-Render-To-Texture
+let render_pipeline_cube = null;
+let buffer_uniform_cube = null;
+let bindgroup_uniform_cube = null;
+let bindgroup_teapot_texture_and_sampler = null;
+let buffer_cube_position = null;
+
+let buffer_cube_texcoord = null;
+
+
 
 //Added in 10-Light-Per-Vertex
-var lightAmbient = new Float32Array([0.1, 0.1, 0.1, 0.0]);
-var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 0.0]);
-var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+var lightAmbient = new Float32Array([0.4, 0.4, 0.4, 1.0]);
+var lightDiffuse = new Float32Array([1.0, 1.0, 1.0, 1.0]);
+var lightSpecular = new Float32Array([1.0, 1.0, 1.0, 1.0]);
 var lightPosition = new Float32Array([100.0, 100.0, 100.0, 1.0]);
 
-var materialAmbient = new Float32Array([0.0, 0.0, 0.0, 0.0]);
-var materialDiffuse = new Float32Array([0.5, 0.2, 0.7, 0.0]);
-var materialSpecular = new Float32Array([0.7, 0.7, 0.7, 0.0]);
-var materialShininess = new Float32Array([128.0, 0.0, 0.0, 0.0]);
-var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
+var materialAmbient = new Float32Array([0.9, 0.5, 0.3, 1.0]);
+var materialDiffuse = new Float32Array([0.9, 0.5, 0.3, 1.0]);
+var materialSpecular = new Float32Array([0.8, 0.8, 0.8, 1.0]);
+var materialShininess = new Float32Array([128.0, 0.0, 0.0, 1.0]);
 
+// var lKeyPressed = new Uint32Array([0, 0, 0, 0]); //first x is light is off so it is 0
+
+
+
+var keyFlags = new Uint32Array([0, 0, 0, 0]); //x for light //y for texture
 var isLightingEnabled = false;
+var isTextureEnabled = false;
+var isTeapotAnimating = false;
+var angleTeapot = 0.0;
+var angleCube = 0.0;
+
+
 
 
 
@@ -129,7 +166,7 @@ async function main(params) {
     device.lost.then(onDeviceLost);
 
     // call stub functions from here  
-    initialize();
+    await initialize();
     resize();
     display();
 
@@ -183,7 +220,7 @@ function onFullScreenChange() {
     resize();
 }
 
-function initialize() {
+async function initialize() {
 
     queue = device.queue;
 
@@ -211,11 +248,13 @@ function initialize() {
     context.configure(canvasConfiguration);
     console.log('canvas configuration is done successfully for WebGPU with format:', canvasFormat, "\n");
 
+    //=============================================TEAPOT==========================================
+
     // Added in  02-Perspective_Triangle 
     //1.Write vertex shader code as string.
     // vertex shader code in WGSL
-    const vertexShaderSourceCode =
-        "struct MyUniformData" +
+    const teapotVertexShaderSourceCode =
+        "struct MyUniformData_FBO" +
         "{" +
         "modelMatrix : mat4x4<f32>," +
         "viewMatrix : mat4x4<f32>," +
@@ -228,7 +267,7 @@ function initialize() {
         "materialDiffuse : vec4<f32>," +
         "materialSpecular : vec4<f32>," +
         "materialShininess : vec4<f32>," +
-        "lKeyisPressed : vec4<u32>" +
+        "keyFlags : vec4<f32>," +
         "};" +
         "struct VertexOutput" +
         "{" +
@@ -236,11 +275,12 @@ function initialize() {
         "@location(0) transformedNormal:vec3<f32>," +
         "@location(1) lightDirection:vec3<f32>," +
         "@location(2) viewerVector:vec3<f32>" +
+        "@location(3) texCoord:vec2<f32>" +
         "};" +
-        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
+        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData_FBO;" +
         "@vertex" + // vertex shader entry point and shader type
         "\n" +
-        "fn main(@location(0) vPos : vec3<f32>,@location(1) vNormal : vec3<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "fn main(@location(0) vPos : vec3<f32>,@location(1) vNormal : vec3<f32>,@location(2) vTexCoord : vec2<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
         "{" +
         "var output : VertexOutput;" +
         "if(uMyUniformData.lKeyisPressed.x == 1u)" + // WGSL is strictyl typed with no implicit type conversion or promotion so we have to use 1u for unsigned int 1
@@ -251,6 +291,7 @@ function initialize() {
         "output.transformedNormal =  normalize(normalMatrix * vNormal);" +
         "output.lightDirection = normalize(uMyUniformData.lightPosition.xyz - eyeCoordinates.xyz);" +
         "output.viewerVector = normalize(-eyeCoordinates.xyz);" +
+        "output.texCoord = vTexCoord;" +
         "}" +
         "output.position = uMyUniformData.projectionMatrix * uMyUniformData.viewMatrix * uMyUniformData.modelMatrix * vec4<f32>(vPos,1.0);" +
         "return output;" +
@@ -295,24 +336,24 @@ function initialize() {
 
     // 2.Create Vertex shader module. GPUShaderModuleDescriptor
     // A. Create shader module descriptor.
-    const shaderModuleDescriptor_vertexShader =
+    const shaderModuleDescriptor_teapot_vertexShader =
     {
-        code: vertexShaderSourceCode
+        code: teapotVertexShaderSourceCode
     };
 
     // B. Create  actual shader module. GPUShaderModule
-    const shaderModule_vertexShader = device.createShaderModule(shaderModuleDescriptor_vertexShader);
+    const shaderModule_teapot_vertex = device.createShaderModule(shaderModuleDescriptor_teapot_vertexShader);
 
-    if (shaderModule_vertexShader == null) {
-        console.log("Failed to create vertex shader module \n");
-        throw Error("Failed to create vertex shader module \n");
+    if (shaderModule_teapot_vertex == null) {
+        console.log("Failed to create teapot vertex shader module \n");
+        throw Error("Failed to create teapot vertex shader module \n");
     } else {
-        console.log("Vertex shader module is created successfully \n");
+        console.log("Teapot vertex shader module is created successfully \n");
     }
 
     // fragment shader code in WGSL
-    const fragmentShaderSourceCode =
-        "struct MyUniformData" +
+    const teapotFragmentShaderSourceCode =
+        "struct MyUniformData_FBO" +
         "{" +
         "modelMatrix : mat4x4<f32>," +
         "viewMatrix : mat4x4<f32>," +
@@ -325,7 +366,7 @@ function initialize() {
         "materialDiffuse : vec4<f32>," +
         "materialSpecular : vec4<f32>," +
         "materialShininess : vec4<f32>," +
-        "lKeyisPressed : vec4<u32>" +
+        "keyFlags : vec4<f32>," +
         "};" +
         "struct VertexOutput" +
         "{" +
@@ -333,14 +374,29 @@ function initialize() {
         "@location(0) transformedNormal:vec3<f32>," +
         "@location(1) lightDirection:vec3<f32>," +
         "@location(2) viewerVector:vec3<f32>" +
+        "@location(3) texCoord:vec2<f32>" +
         "};" +
-        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData;" +
+        "@group(0) @binding(0) var<uniform> uMyUniformData : MyUniformData_FBO;" +
+        "@group(1) @binding(0) var uMarbleTexture2D: texture_2d<f32>;" +
+        "@group(1) @binding(1) var uMarbleSampler: sampler;" +
         "@fragment" + // vertex shader entry point and shader type
         "\n" +
         "fn main(output: VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
         "{" +
-        "var phong_ads_color : vec3<f32>;" +
-        "if(uMyUniformData.lKeyisPressed.x == 1u)" +
+        "var phong_ads_color = vec3<f32>(0.0,0.0,0.0);" +
+        "if(uMyUniformData.keyFlags.x == 1u && uMyUniformData.keyFlags.y == 1u)" +
+        "{" +
+
+        "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
+        "let normalized_lightDirection : vec3<f32> = normalize(output.lightDirection);" +
+        "let normalized_viewerVector : vec3<f32> = normalize(output.viewerVector);" +
+        "let ambient : vec3<f32> = uMyUniformData.lightAmbient.xyz * uMyUniformData.materialAmbient.xyz * textureSample(uMarbleTexture2D,uMarbleSampler,output.texCoord).xyz;" +
+        "let diffuse : vec3<f32> = uMyUniformData.lightDiffuse.xyz * uMyUniformData.materialDiffuse.xyz * max(dot(normalized_lightDirection,normalized_transformedNormal),0.0) * textureSample(uMarbleTexture2D,uMarbleSampler,output.texCoord).xyz;" +
+        "let reflectionVector : vec3<f32> = reflect(-normalized_lightDirection,normalized_transformedNormal);" +
+        "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
+        "phong_ads_color = ambient + diffuse + specular;" +
+        "}" +
+        "else if(uMyUniformData.keyFlags.x == 1u && uMyUniformData.keyFlags.y == 0u)" +
         "{" +
         "let normalized_transformedNormal : vec3<f32> = normalize(output.transformedNormal);" +
         "let normalized_lightDirection : vec3<f32> = normalize(output.lightDirection);" +
@@ -351,73 +407,230 @@ function initialize() {
         "let specular : vec3<f32> = uMyUniformData.lightSpecular.xyz * uMyUniformData.materialSpecular.xyz * pow(max(dot(reflectionVector,normalized_viewerVector),0.0),uMyUniformData.materialShininess.x);" +
         "phong_ads_color = ambient + diffuse + specular;" +
         "}" +
-        "else" +
-        "{" +
-        "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
-        "}" +
-        "return  vec4<f32>(phong_ads_color,1.0);" +
+        "else if(uMyUniformData.keyFlags.x == 0u && uMyUniformData.keyFlags.y == 1u)" +
+        "{"
+    "phong_ads_color = textureSample(uMarbleTexture2D,uMarbleSampler,output.texCoord).xyz;" +
+        "}"
+    "else" +
+        "{"
+    "phong_ads_color = vec3<f32>(1.0,1.0,1.0);" +
+        "}"
+    "return  vec4<f32>(phong_ads_color,1.0);" +
         "}";
 
     // 2.Create Fragment shader module. GPUShaderModuleDescriptor
     // A. Create shader module descriptor.
-    const shaderModuleDescriptor_fragmentShader =
+    const shaderModuleDescriptor_teapotFragmentShader =
     {
-        code: fragmentShaderSourceCode
+        code: teapotFragmentShaderSourceCode
     };
 
     // B. Create  actual shader module. GPUShaderModule
-    const shaderModule_fragmentShader = device.createShaderModule(shaderModuleDescriptor_fragmentShader);
+    const shaderModule_teapotFragmentShader = device.createShaderModule(shaderModuleDescriptor_teapotFragmentShader);
 
-    if (shaderModule_fragmentShader == null) {
-        console.log("Failed to create Fragment shader module \n");
-        throw Error("Failed to create Fragment shader module \n");
+    if (shaderModule_teapotFragmentShader == null) {
+        console.log("Failed to create teapot fragment shader module \n");
+        throw Error("Failed to create teapot fragment shader module \n");
     } else {
-        console.log("Fragment shader module is created successfully \n");
+        console.log("Teapot fragment shader module is created successfully \n");
+    }
+
+
+    //=============================================CUBE==========================================
+
+    const cubeVertexShaderSourceCode =
+        "struct MVPUniform" +
+        "{" +
+        "mvpMatrix : mat4x4<f32>" +
+        "};" +
+        "struct VertexOutput" +
+        "{" +
+        " @builtin(position) position : vec4<f32>," +
+        " @location(0) texcoords : vec2<f32>" +
+        "};" +
+        "@group(0) @binding(0) var<uniform> mvpUniform : MVPUniform;" +
+        "@vertex" + // vertex shader entry point and shader type
+        "\n" +
+        "fn main(@location(0) vPos : vec4<f32>, @location(1) tex: vec2<f32>) -> VertexOutput" + // vertex shader main function -> means return type is vec4<f32> and it is a builtin position variable
+        "{" +
+        "var output : VertexOutput;" +
+        "output.position = mvpUniform.mvpMatrix * vPos;" +
+        "output.texcoords = tex;" +
+        "return output;" +
+        "}";
+
+    const shaderModuleDescriptor_cubeVertexShader =
+    {
+        code: cubeVertexShaderSourceCode
+    };
+
+    // B. Create  actual shader module. GPUShaderModule
+    const shaderModule_cubeVertexShader = device.createShaderModule(shaderModuleDescriptor_cubeVertexShader);
+
+    if (shaderModule_cubeVertexShader == null) {
+        console.log("Failed to create cube vertex shader module \n");
+        throw Error("Failed to create cube vertex shader module \n");
+    } else {
+        console.log("Cube vertex shader module is created successfully \n");
+    }
+
+
+    const cubeFragmentShaderSourceCode =
+        "struct VertexOutput" +
+        "{" +
+        " @builtin(position) position : vec4<f32>," +
+        " @location(0) texcoords : vec2<f32>" +
+        "};" +
+        "@group(1) @binding(0) var uTeapotTexture: texture_2d<f32>;" +
+        "@group(1) @binding(1) var uTeapotSampler: sampler;" +
+        "@fragment" + // vertex shader entry point and shader type
+        "\n" +
+        "fn main(output:VertexOutput) -> @location(0) vec4<f32>" +  //this is output color of fragment shader  
+        "{" +
+        "var color = textureSample(uTeapotTexture, uTeapotSampler, output.texcoords );" +
+        "return color;" +
+        "}";
+
+
+    const shaderModuleDescriptor_cubeFragmentShader =
+    {
+        code: cubeFragmentShaderSourceCode
+    };
+
+    // B. Create  actual shader module. GPUShaderModule
+    const shaderModule_cubeFragmentShader = device.createShaderModule(shaderModuleDescriptor_cubeFragmentShader);
+
+    if (shaderModule_cubeFragmentShader == null) {
+        console.log("Failed to create cube fragment shader module \n");
+        throw Error("Failed to create cube fragment shader module \n");
+    } else {
+        console.log("Cube fragment shader module is created successfully \n");
+    }
+
+
+    //==================================================TEAPOT GEOMETRY =====================================
+
+
+    const teapot = new Mesh();
+
+    teapot.allocate(teapotVertexCount);
+
+    const startTime = performance.now();
+
+
+    for (let i = 0; i < teapotVertexCount; i = i + 3) {
+        const single_vertex =
+            [
+                [teapotpositions[(i + 0) * 3 + 0], teapotpositions[(i + 0) * 3 + 1], teapotpositions[(i + 0) * 3 + 2]],
+                [teapotpositions[(i + 1) * 3 + 0], teapotpositions[(i + 1) * 3 + 1], teapotpositions[(i + 1) * 3 + 2]],
+                [teapotpositions[(i + 2) * 3 + 0], teapotpositions[(i + 2) * 3 + 1], teapotpositions[(i + 2) * 3 + 2]]
+
+            ];
+
+        //normal 
+        const single_normal =
+            [
+                [teapotnormals[(i + 0) * 3 + 0], teapotnormals[(i + 0) * 3 + 1], teapotnormals[(i + 0) * 3 + 2]],
+                [teapotnormals[(i + 1) * 3 + 0], teapotnormals[(i + 1) * 3 + 1], teapotnormals[(i + 1) * 3 + 2]],
+                [teapotnormals[(i + 2) * 3 + 0], teapotnormals[(i + 2) * 3 + 1], teapotnormals[(i + 2) * 3 + 2]]
+
+            ];
+
+        //texcoord
+        const single_texcoord =
+            [
+                [teapottexCoords[(i + 0) * 2 + 0], teapottexCoords[(i + 0) * 2 + 1]],
+                [teapottexCoords[(i + 1) * 2 + 0], teapottexCoords[(i + 1) * 2 + 1]],
+                [teapottexCoords[(i + 2) * 2 + 0], teapottexCoords[(i + 2) * 2 + 1]]
+            ];
+        teapot.addTriangle(single_vertex, single_normal, single_texcoord);
+    }
+
+    numTeapotIndicies = teapot.getIndexCount();
+
+    const teapotMeshData = teapot.getMeshData();
+    buffer_teapot_postion = createVertexBuffer(teapotMeshData.verticesArray);
+    if (buffer_teapot_postion == null) {
+        console.log("Failed to create vertex buffer for teapot position \n");
+        throw Error("Failed to create vertex buffer for teapot position \n");
+    } else {
+        console.log("Vertex buffer for teapot position is created successfully \n");
+    }
+
+    buffer_teapot_normal = createVertexBuffer(teapotMeshData.normalsArray);
+    if (buffer_teapot_normal == null) {
+        console.log("Failed to create vertex buffer for teapot normal \n");
+        throw Error("Failed to create vertex buffer for teapot normal \n");
+    } else {
+        console.log("Vertex buffer for teapot normal is created successfully \n");
+    }
+
+    buffer_teapot_texcoords = createVertexBuffer(teapotMeshData.texCoordsArray);
+    if (buffer_teapot_texcoords == null) {
+        console.log("Failed to create vertex buffer for teapot texcoords \n");
+        throw Error("Failed to create vertex buffer for teapot texcoords \n");
+    } else {
+        console.log("Vertex buffer for teapot texcoords is created successfully \n");
+    }
+
+    buffer_teapot_element = createIndexBuffer(teapotMeshData.indicesArray);
+    if (buffer_teapot_element == null) {
+        console.log("Failed to create index buffer for teapot element \n");
+        throw Error("Failed to create index buffer for teapot element \n");
+    } else {
+        console.log("Index buffer for teapot element is created successfully \n");
     }
 
 
 
-    sphere = new Mesh();
-    makeSphere(sphere, 2.0, 30, 30);
-    numMeshIndices = sphere.getIndexCount();
-    console.log("Sphere Geometrty = Vertex Count = ", sphere.getVertexCount(), "Index Count = ", numMeshIndices, "\n");
+    //===========================CUBE GEOMETRY=======================================
+     const cube_position = new Float32Array([
+        1.0, 1.0, 1.0,
+        -1.0, 1.0, 1.0,
+        1.0, -1.0, 1.0,
+        -1.0, -1.0, 1.0,
 
-    const meshData = sphere.getMeshData();
+        1.0, 1.0, -1.0,
+        -1.0, 1.0, -1.0,
+        1.0, -1.0, -1.0,
+        -1.0, -1.0, -1.0
+        
+     ])
+    
+    // //create Vertex Buffer for position, normal, texcoord and element array buffer for indices
+    // buffer_position = createVertexBuffer(meshData.verticesArray);
 
-    //create Vertex Buffer for position, normal, texcoord and element array buffer for indices
-    buffer_position = createVertexBuffer(meshData.verticesArray);
-
-    if (buffer_position == null) {
-        console.log("Failed to create vertex buffer for position \n");
-        throw Error("Failed to create vertex buffer for position \n");
-    } else {
-        console.log("Vertex buffer for position is created successfully \n");
-    }
+    // if (buffer_position == null) {
+    //     console.log("Failed to create vertex buffer for position \n");
+    //     throw Error("Failed to create vertex buffer for position \n");
+    // } else {
+    //     console.log("Vertex buffer for position is created successfully \n");
+    // }
 
 
-    buffer_normal = createVertexBuffer(meshData.normalsArray);
-    if (buffer_normal == null) {
-        console.log("Failed to create vertex buffer for normal \n");
-        throw Error("Failed to create vertex buffer for normal \n");
-    } else {
-        console.log("Vertex buffer for normal is created successfully \n");
-    }
+    // buffer_normal = createVertexBuffer(meshData.normalsArray);
+    // if (buffer_normal == null) {
+    //     console.log("Failed to create vertex buffer for normal \n");
+    //     throw Error("Failed to create vertex buffer for normal \n");
+    // } else {
+    //     console.log("Vertex buffer for normal is created successfully \n");
+    // }
 
-    buffer_texcoord = createVertexBuffer(meshData.texCoordsArray);
-    if (buffer_texcoord == null) {
-        console.log("Failed to create vertex buffer for texcoord \n");
-        throw Error("Failed to create vertex buffer for texcoord \n");
-    } else {
-        console.log("Vertex buffer for texcoord is created successfully \n");
-    }
+    // buffer_texcoord = createVertexBuffer(meshData.texCoordsArray);
+    // if (buffer_texcoord == null) {
+    //     console.log("Failed to create vertex buffer for texcoord \n");
+    //     throw Error("Failed to create vertex buffer for texcoord \n");
+    // } else {
+    //     console.log("Vertex buffer for texcoord is created successfully \n");
+    // }
 
-    buffer_element = createIndexBuffer(meshData.indicesArray);
-    if (buffer_element == null) {
-        console.log("Failed to create index buffer for element \n");
-        throw Error("Failed to create index buffer for element \n");
-    } else {
-        console.log("Index buffer for element is created successfully \n");
-    }
+    // buffer_element = createIndexBuffer(meshData.indicesArray);
+    // if (buffer_element == null) {
+    //     console.log("Failed to create index buffer for element \n");
+    //     throw Error("Failed to create index buffer for element \n");
+    // } else {
+    //     console.log("Index buffer for element is created successfully \n");
+    // }
 
 
     // 5.Now will do uniform plumbing for MVP Uniform
@@ -1031,12 +1244,39 @@ function onDeviceLost(info) {
     bindingGroup_uniform = null;
     perspectiveProjectionMatrix = null;
     depthTexture = null;
-    sphere = null;
-    numMeshIndices = 0;
-    buffer_position = null;
-    buffer_normal = null;
-    buffer_texcoord = null;
-    buffer_element = null;
+
+
+    //teapot
+    buffer_teapot_postion = null;
+    buffer_teapot_normal = null;
+    buffer_teapot_elements = null;
+    buffer_marble_texcoord = null;
+    texture_marble = null;
+    sampler_marble = null;
+    texture_teapot_color = null;
+    texture_teapot_depth = null;
+    sampler_teapot = null;
+    bindgroup_uniform_teapot = null;
+    bindgroup_marble_texture_and_sampler = null;
+    bindgroup_teapot_texture_and_sampler = null;
+    render_pipeline_teapot = null;
+    buffer_uniform_teapot = null;
+
+    // cube
+    buffer_cube_position = null;
+    buffer_cube_texcoord = null;
+    buffer_cube_normal = null;
+    buffer_cube_element = null;
+    texture_cube = null;
+    sampler_cube = null;
+    bindgroup_uniform_cube = null;
+    bindgroup_cube_texture_and_sampler = null;
+    render_pipeline_cube = null;
+    buffer_uniform_cube = null;
+
+
+    perspectiveProjectionMatrix_fbo = null;
+
 }
 
 function uninitialize() {
