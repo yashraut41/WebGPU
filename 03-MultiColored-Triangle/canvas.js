@@ -107,7 +107,7 @@ async function main(params) {
     device.lost.then(onDeviceLost);
 
     // call stub functions from here  
-    initialize();
+    await initialize();
     resize();
     display();
 
@@ -172,7 +172,7 @@ function onFullScreenChange() {
     resize();
 }
 
-function initialize() {
+async function initialize() {
 
     queue = device.queue;
 
@@ -292,8 +292,10 @@ function initialize() {
     const bufferDescriptor_position =
     {
         size: vertex_position.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.VERTEX,
     };
+
+    device.pushErrorScope('validation');
 
     // B. Create  actual vertex buffer for position
     // GPUBuffer
@@ -312,6 +314,10 @@ function initialize() {
 
     queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
 
+    const err = await device.popErrorScope();
+    if (err) {
+        console.error("createBuffer failed:", err.message);
+    }
     console.log("Writing Vertex position data  into position buffer is completed \n");
 
 
