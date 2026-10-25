@@ -1,10 +1,10 @@
 /**
-* @author [Yahwant Raut]
-* @email [yashwantraut41@mail.com]
-* @create date 2026-07-15 22:58:11
-* @modify date 2026-08-19 22:01:55
-* @desc [description]
-*/
+ * @author Yashwant Raut
+ * @email yashwantraut41@gmail.com
+ * @create date 2026-10-25 12:41:52
+ * @modify date 2026-10-25 12:41:52
+ * @desc [description]
+ */
 
 
 //global variables 
@@ -24,27 +24,43 @@ let canvasFormat = null;
 let animationFrameId = null;
 
 // Added in 02-Perspective_Triangle 
-let buffer_position = null;
+let buffer_position_pyramid = null;
+let buffer_position_cube = null;
 // Added in 03-Multicored_Triangle
 
 // let buffer_color = null;
 //added in texture 
-let buffer_texcoord = null;
+let buffer_texcoord_pyramid = null;
+let buffer_texcoord_cube = null;
 let render_pipeline = null;
-let buffer_mvpUniform = null;
-let bindingGroup_mvpUniform = null;
+// let buffer_mvpUniform = null;
+// let bindingGroup_mvpUniform = null;
 
 //added in texture 
 let bindingGroup_texutre_and_sampler = null;
+let bindingGroup_texutre_and_sampler_cube = null;
 
 let perspectiveProjectionMatrix = null;
 
 let depthTexture = null;
-let texture_smiley = null;
-let sampler_smiley = null;
+// let texture_smiley = null;
+// let sampler_smiley = null;
 
-let buffer_mvpUniform_square = null;
+let texture_stone_pyramid = null;
+let sampler_stone_pyramid = null;
 
+
+let texture_kundali_cube = null;
+let sampler_kundali_cube = null;
+
+let buffer_mvpUniform_pyramid = null;
+let buffer_mvpUniform_cube = null;
+
+let bindingGroup_mvpUniform_pyramid = null;
+let bindingGroup_mvpUniform_cube = null;
+
+var angle_pyramid = 0.0;
+var angle_cube = 0.0;
 
 
 //how to start animation: to have requestAnimationFrame() to be called "crossbrowser" compatible
@@ -126,23 +142,34 @@ async function main(params) {
 }
 
 function onUncapturedError(event) {
-    console.error("WebGPU uncaptured error:", event.Error.message);
+    console.error("WebGPU uncaptured error:", event.error.message);
 }
 
 function onDeviceLost(info) {
     console.warn("WebGPU  device lost  reason:", info.reason, "Message:", info.message);
     device = null;
     queue = null;
-    buffer_position = null;
-    buffer_texcoord = null;
     render_pipeline = null;
-    buffer_mvpUniform = null;
-    bindingGroup_mvpUniform = null;
-    perspectiveProjectionMatrix = null;
     depthTexture = null;
-    texture_smiley = null;
-    sampler_smiley = null;
+    perspectiveProjectionMatrix = null;
+
+    // pyramid
+    buffer_position_pyramid = null;
+    buffer_texcoord_pyramid = null;
+    buffer_mvpUniform_pyramid = null;
+    bindingGroup_mvpUniform_pyramid = null;
+    texture_stone_pyramid = null;
+    sampler_stone_pyramid = null;
     bindingGroup_texutre_and_sampler = null;
+
+    // cube
+    buffer_position_cube = null;
+    buffer_texcoord_cube = null;
+    buffer_mvpUniform_cube = null;
+    bindingGroup_mvpUniform_cube = null;
+    texture_kundali_cube = null;
+    sampler_kundali_cube = null;
+    bindingGroup_texutre_and_sampler_cube = null;
 
 }
 
@@ -293,42 +320,70 @@ async function initialize() {
     }
 
 
-    // 3.Declare postion array.
-    const vertex_position = new Float32Array([
-        1.0, 1.0, 0.0, 1.0,   // right top 
-        -1.0, 1.0, 0.0, 1.0,   //left top
-        -1.0, -1.0, 0.0, 1.0,   //left bottom
+    const bindGroupLayout_mvpUniform = createBindGroupLayoutUniform(
+        0,
+        GPUShaderStage.VERTEX,
+        "uniform"
+    );
 
-        -1.0, -1.0, 0.0, 1.0,   //left bottom
-        1.0, -1.0, 0.0, 1.0,    //right bottom
-        1.0, 1.0, 0.0, 1.0    // right top
+    //#region ===================================== pyramid position buffer started ===============
+
+    const pyramid_position = new Float32Array([
+        0.0, 1.0, 0.0, 1.0, // missing apex
+        -1.0, -1.0, 1.0, 1.0,
+        1.0, -1.0, 1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        1.0, -1.0, 1.0, 1.0,
+        1.0, -1.0, -1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        1.0, -1.0, -1.0, 1.0,
+        -1.0, -1.0, -1.0, 1.0,
+
+        0.0, 1.0, 0.0, 1.0,
+        -1.0, -1.0, -1.0, 1.0,
+        -1.0, -1.0, 1.0, 1.0,
     ]);
 
 
     // Updated  in texture
-    const vertex_texcoord = new Float32Array([
-        1.0, 1.0,
-        0.0, 1.0,
-        0.0, 0.0,
+    const pyramid_vertex_texcoord = new Float32Array([
 
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0, 1.0
+
+        0.5, 1.0, // front-top
+        0.0, 0.0, // front-left
+        1.0, 0.0, // front-right
+
+        // right
+        0.5, 1.0, // right-top
+        1.0, 0.0, // right-left
+        0.0, 0.0, // right-right
+
+        // back
+        0.5, 1.0, // back-top
+        0.0, 0.0, // back-left
+        1.0, 0.0, // back-right
+
+        // left
+        0.5, 1.0, // left-top
+        1.0, 0.0, // left-left
+        0.0, 0.0, // left-right
     ]);
 
     // 4.Create vertex buffer for postion. GPUBufferDescriptor
     // A. Create buffer descriptor
-    const bufferDescriptor_position =
+    const bufferDescriptor_position_pyramid =
     {
-        size: vertex_position.byteLength,
+        size: pyramid_position.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     };
 
     // B. Create  actual vertex buffer for position
     // GPUBuffer
-    buffer_position = device.createBuffer(bufferDescriptor_position);
+    buffer_position_pyramid = device.createBuffer(bufferDescriptor_position_pyramid);
 
-    if (buffer_position == null) {
+    if (buffer_position_pyramid == null) {
         console.log("Failed to create vertex buffer for position \n");
         throw Error("Failed to create vertex buffer for position \n");
     } else {
@@ -339,26 +394,37 @@ async function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_position, 0, vertex_position, 0, vertex_position.length);
+    queue.writeBuffer(buffer_position_pyramid, 0, pyramid_position, 0, pyramid_position.length);
 
     console.log("Writing Vertex position data  into position buffer is completed \n");
 
+    const mvpUniformSize = 4 * 16;
 
 
-    //======================= Texcoord buffer started ======================
+
+    // mvp uniform buffer for Square
+    buffer_mvpUniform_pyramid = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+
+    // create bind group for mvp uniform buffer for square 
+    bindingGroup_mvpUniform_pyramid = createBindGroupForUniform(buffer_mvpUniform_pyramid, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
+
+    //#endregion ===================================== pyramid position buffer ended ===============
+
+
+    //#region ======================= Texcoord buffer started pyramid ======================
     // 4.Create vertex buffer for cOLOR. GPUBufferDescriptor
     // A. Create buffer descriptor
-    const bufferDescriptor_texcoord =
+    const bufferDescriptor_texcoord_pyramid =
     {
-        size: vertex_texcoord.byteLength,
+        size: pyramid_vertex_texcoord.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     };
 
     // B. Create  actual vertex buffer for position
     // GPUBuffer
-    buffer_texcoord = device.createBuffer(bufferDescriptor_texcoord);
+    buffer_texcoord_pyramid = device.createBuffer(bufferDescriptor_texcoord_pyramid);
 
-    if (buffer_texcoord == null) {
+    if (buffer_texcoord_pyramid == null) {
         console.log("Failed to create vertex buffer for Texcoord \n");
         throw Error("Failed to create vertex buffer for Texcoord \n");
     } else {
@@ -369,16 +435,181 @@ async function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_texcoord, 0, vertex_texcoord, 0, buffer_texcoord.length);
+    queue.writeBuffer(buffer_texcoord_pyramid, 0, pyramid_vertex_texcoord, 0, buffer_texcoord_pyramid.length);
 
     console.log("Writing Vertex Texcoord data  into texcoord buffer is completed \n");
 
+    //#endregion======================================= Pyramid Texcoord buffer ended ======================
 
-    const bindGroupLayout_mvpUniform = createBindGroupLayoutUniform(
-        0,
-        GPUShaderStage.VERTEX,
-        "uniform"
-    );
+    //#region ======================================= Cube Position buffer Started ======================
+
+    //buffer for cube postion 
+    // postion data of cube 
+
+    const cube_position = new Float32Array([
+        // front
+        1.0, 1.0, 1.0, 1.0,   // front: top-right (triangle 1)
+        -1.0, 1.0, 1.0, 1.0,  // front: top-left (triangle 1)
+        -1.0, -1.0, 1.0, 1.0, // front: bottom-left (triangle 1)
+
+        1.0, 1.0, 1.0, 1.0,   // front: top-right (triangle 2)
+        -1.0, -1.0, 1.0, 1.0, // front: bottom-left (triangle 2)
+        1.0, -1.0, 1.0, 1.0,  // front: bottom-right (triangle 2)
+
+        // right
+        1.0, 1.0, -1.0, 1.0,  // right: top-back (triangle 1)
+        1.0, 1.0, 1.0, 1.0,   // right: top-front (triangle 1)
+        1.0, -1.0, 1.0, 1.0,  // right: bottom-front (triangle 1)
+
+        1.0, 1.0, -1.0, 1.0,  // right: top-back (triangle 2)
+        1.0, -1.0, 1.0, 1.0,  // right: bottom-front (triangle 2)
+        1.0, -1.0, -1.0, 1.0, // right: bottom-back (triangle 2)
+
+        // back
+        1.0, 1.0, -1.0, 1.0,   // back: top-left (triangle 1)
+        -1.0, 1.0, -1.0, 1.0,  // back: top-right (triangle 1)
+        -1.0, -1.0, -1.0, 1.0, // back: bottom-right (triangle 1)
+
+        1.0, 1.0, -1.0, 1.0,   // back: top-left (triangle 2)
+        -1.0, -1.0, -1.0, 1.0, // back: bottom-right (triangle 2)
+        1.0, -1.0, -1.0, 1.0,  // back: bottom-left (triangle 2)
+
+        // left
+        -1.0, 1.0, 1.0, 1.0,  // left: top-front (triangle 1)
+        -1.0, 1.0, -1.0, 1.0, // left: top-back (triangle 1)
+        -1.0, -1.0, -1.0, 1.0, // left: bottom-back (triangle 1)
+
+        -1.0, 1.0, 1.0, 1.0,  // left: top-front (triangle 2)
+        -1.0, -1.0, -1.0, 1.0, // left: bottom-back (triangle 2)
+        -1.0, -1.0, 1.0, 1.0, // left: bottom-front (triangle 2)
+
+        // top
+        1.0, 1.0, -1.0, 1.0,  // top: back-right (triangle 1)
+        -1.0, 1.0, -1.0, 1.0, // top: back-left (triangle 1)
+        -1.0, 1.0, 1.0, 1.0,  // top: front-left (triangle 1)
+
+        1.0, 1.0, -1.0, 1.0,  // top: back-right (triangle 2)
+        -1.0, 1.0, 1.0, 1.0,  // top: front-left (triangle 2)
+        1.0, 1.0, 1.0, 1.0,   // top: front-right (triangle 2)
+
+        // bottom
+        1.0, -1.0, 1.0, 1.0,  // bottom: front-right (triangle 1)
+        -1.0, -1.0, 1.0, 1.0, // bottom: front-left (triangle 1)
+        -1.0, -1.0, -1.0, 1.0, // bottom: back-left (triangle 1)
+
+        1.0, -1.0, 1.0, 1.0,  // bottom: front-right (triangle 2)
+        -1.0, -1.0, -1.0, 1.0, // bottom: back-left (triangle 2)
+        1.0, -1.0, -1.0, 1.0, // bottom: back-right (triangle 2)
+    ]);
+
+
+    const bufferDescriptor_position_cube =
+    {
+        size: cube_position.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    };
+
+
+    buffer_position_cube = device.createBuffer(bufferDescriptor_position_cube);
+
+    if (buffer_position_cube == null) {
+        console.log("Failed to create vertex buffer for Cube position \n");
+        throw Error("Failed to create vertex buffer for Cube position \n");
+    } else {
+        console.log("Vertex buffer for Cube position is created successfully \n");
+    }
+
+    //write buffer data for cube position
+    queue.writeBuffer(buffer_position_cube, 0, cube_position, 0, cube_position.length);
+
+
+    // mvp uniform buffer for Square
+    buffer_mvpUniform_cube = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+
+    // create bind group for mvp uniform buffer for square 
+    bindingGroup_mvpUniform_cube = createBindGroupForUniform(buffer_mvpUniform_cube, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
+
+
+    //#endregion================================ Cube position buffer ended ======================
+
+
+    //#region ========================Cube texcoord buffer started ======================
+
+    const cube_vertex_texcoord = new Float32Array([
+
+        // front
+        1.0, 1.0, // top-right of front
+        0.0, 1.0, // top-left of front
+        0.0, 0.0, // bottom-left of front
+        1.0, 1.0, // top-right of front
+        0.0, 0.0, // bottom-left of front
+        1.0, 0.0, // bottom-right of front
+
+        // right
+        1.0, 1.0, // top-right of right
+        0.0, 1.0, // top-left of right
+        0.0, 0.0, // bottom-left of right
+        1.0, 1.0, // top-right of right
+        0.0, 0.0, // bottom-left of right
+        1.0, 0.0, // bottom-right of right
+
+        // back
+        1.0, 1.0, // top-right of back
+        0.0, 1.0, // top-left of back
+        0.0, 0.0, // bottom-left of back
+        1.0, 1.0, // top-right of back
+        0.0, 0.0, // bottom-left of back
+        1.0, 0.0, // bottom-right of back
+
+        // left
+        1.0, 1.0, // top-right of left
+        0.0, 1.0, // top-left of left
+        0.0, 0.0, // bottom-left of left
+        1.0, 1.0, // top-right of left
+        0.0, 0.0, // bottom-left of left
+        1.0, 0.0, // bottom-right of left
+
+        // top
+        1.0, 1.0, // top-right of top
+        0.0, 1.0, // top-left of top
+        0.0, 0.0, // bottom-left of top
+        1.0, 1.0, // top-right of top
+        0.0, 0.0, // bottom-left of top
+        1.0, 0.0, // bottom-right of top
+
+        // bottom
+        1.0, 1.0, // top-right of bottom
+        0.0, 1.0, // top-left of bottom
+        0.0, 0.0, // bottom-left of bottom
+        1.0, 1.0, // top-right of bottom
+        0.0, 0.0, // bottom-left of bottom
+        1.0, 0.0, // bottom-right of bottom
+    ]);
+
+    const bufferDescriptor_texcoord_cube =
+    {
+        size: cube_vertex_texcoord.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    };
+
+    buffer_texcoord_cube = device.createBuffer(bufferDescriptor_texcoord_cube);
+
+    if (buffer_texcoord_cube == null) {
+        console.log("Failed to create vertex buffer for Cube Texcoord \n");
+        throw Error("Failed to create vertex buffer for Cube Texcoord \n");
+    } else {
+        console.log("Vertex buffer for Cube Texcoord is created successfully \n");
+    }
+
+
+    queue.writeBuffer(buffer_texcoord_cube, 0, cube_vertex_texcoord, 0, buffer_texcoord_cube.length);
+
+    console.log("Writing Vertex Texcoord data  into texcoord buffer is completed for Cube \n");
+
+    //#endregion ======================== Cube Texcoord buffer Ended ======================
+
+
+
 
 
     const bindGrouplayout_texture_and_sampler = createBindLayoutForTexutreAndSampler(
@@ -409,23 +640,14 @@ async function initialize() {
     }
 
 
-    // 5->C. Now  create uniform buffer for our uniform buffer
-    // a. Create uniform buffer descriptor. GPUBufferDescriptor
-    const mvpUniformSize = 4 * 16;
 
 
 
-    // mvp uniform buffer for Square
-    buffer_mvpUniform = createUniformBuffer(mvpUniformSize, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    //#region  texture loading pyramid
+    // load the texture for pyramid and create sampler for it
 
-    // create bind group for mvp uniform buffer for square 
-    bindingGroup_mvpUniform = createBindGroupForUniform(buffer_mvpUniform, 0, mvpUniformSize, 0, bindGroupLayout_mvpUniform);
-
-
-
-    // load the tex
-    texture_smiley = await loadTexture('Smiley.png');
-    if (texture_smiley == null) {
+    texture_stone_pyramid = await loadTexture('stone.png');
+    if (texture_stone_pyramid == null) {
         console.log("Failed to load texture image \n");
         throw Error("Failed to load texture image \n");
     } else {
@@ -439,8 +661,8 @@ async function initialize() {
     };
 
     //create texture sampler
-    sampler_smiley = device.createSampler(samplerDescriptor);
-    if (sampler_smiley == null) {
+    sampler_stone_pyramid = device.createSampler(samplerDescriptor);
+    if (sampler_stone_pyramid == null) {
         console.log("Failed to Create texture sampler \n");
         throw Error("Failed to Create texture sampler \n");
     } else {
@@ -452,11 +674,48 @@ async function initialize() {
 
     bindingGroup_texutre_and_sampler = createBindGroupForTextureAndSampler(
         0,
-        texture_smiley,
+        texture_stone_pyramid,
         1,
-        sampler_smiley,
+        sampler_stone_pyramid,
         bindGrouplayout_texture_and_sampler
     );
+    //#endregion  texture loading pyramid ended
+
+    //#region cube texture loading started
+    texture_kundali_cube = await loadTexture('Kundali.png');
+    if (texture_kundali_cube == null) {
+        console.log("Failed to load texture image \n");
+        throw Error("Failed to load texture image \n");
+    } else {
+        console.log("texture loaded successfully for cube \n");
+    }
+
+    //texture sampler descriptor
+    const samplerDescriptorCube = {
+        magFilter: "linear",
+        minFilter: "linear",
+    };
+
+    //create texture sampler
+    sampler_kundali_cube = device.createSampler(samplerDescriptorCube);
+    if (sampler_kundali_cube == null) {
+        console.log("Failed to Create texture sampler \n");
+        throw Error("Failed to Create texture sampler \n");
+    } else {
+        console.log(" Texture sampler created successfully \n");
+    }
+
+
+    //create texture and sampler bind group
+
+    bindingGroup_texutre_and_sampler_cube = createBindGroupForTextureAndSampler(
+        0,
+        texture_kundali_cube,
+        1,
+        sampler_kundali_cube,
+        bindGrouplayout_texture_and_sampler
+    );
+    //#endregion cube texture loading ended
 
 
 
@@ -663,11 +922,12 @@ function display() {
     // Added in 02-Perspective_Triangle
     //1. Transformations for model, view and projection matrices
     //  A.  Create and initialize required matrices here  we need  model  view  matrix  and model view projection matrix
-    const modelViewMatrix = mat4.create();
-    const modelViewProjectionMatrix = mat4.create();
+    let modelViewMatrix = mat4.create();
+    let modelViewProjectionMatrix = mat4.create();
     //B.  Do  needed  transformations here  we do  only translation.
     // first param is target matrix, second param is source matrix, third param is translation vector
-    mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -4.0]); //translate the modelview matrix by -4 units in z direction
+    mat4.translate(modelViewMatrix, modelViewMatrix, [-1.5, 0.0, -6.0]); //translate the modelview matrix by -4 units in z direction
+    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_pyramid)); //
 
     //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
     mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelViewMatrix);
@@ -680,7 +940,7 @@ function display() {
     // 3. this is source data that we want to write in buffer, 
     // 4. in modelViewProjection matrix from to read so we are saying from 0th  offset,
     // 5. how much data we want to write from source 
-    queue.writeBuffer(buffer_mvpUniform, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
+    queue.writeBuffer(buffer_mvpUniform_pyramid, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
 
 
     //2. Start the render pass
@@ -714,20 +974,49 @@ function display() {
     // vertex buffer is the buffer that contains the vertex data for our scene.
     // 1. first parameter is the slot number of the vertex buffer,
     // 2. second parameter is the vertex buffer that we want to set
-    renderPassEncoder.setVertexBuffer(0, buffer_position);
+    renderPassEncoder.setVertexBuffer(0, buffer_position_pyramid);
     //set color buffer
-    renderPassEncoder.setVertexBuffer(1, buffer_texcoord);
+    renderPassEncoder.setVertexBuffer(1, buffer_texcoord_pyramid);
 
     //e. set bind group
     // bind group is the group of resources that we want to bind to the pipeline.
     // 1. first parameter is the slot number of the bind group,
     // 2. second parameter is the bind group that we want to set
-    renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform);
+    renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform_pyramid);
     renderPassEncoder.setBindGroup(1, bindingGroup_texutre_and_sampler);
 
     //4. Draw the triangle
     // 1. first parameter is the number of vertices to draw
-    renderPassEncoder.draw(6);
+    renderPassEncoder.draw(12);
+    //#endregion drawing ended for the pyramid 
+
+    //#region drawing started for cube 
+    //1. Transformations for model, view and projection matrices
+    //  A.  Create and initialize required matrices here  we need  model  view  matrix  and model view projection matrix
+    modelViewMatrix = mat4.create();
+    modelViewProjectionMatrix = mat4.create();
+
+    mat4.translate(modelViewMatrix, modelViewMatrix, [1.5, 0.0, -6.0]); //translate the modelview matrix by -4 units in z direction
+    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_cube)); //
+    mat4.rotateY(modelViewMatrix, modelViewMatrix, degToRad(angle_cube));
+    mat4.rotateZ(modelViewMatrix, modelViewMatrix, degToRad(angle_cube));
+    //C.  Now multiply modelview matrix with perspective projection matrix to get modelviewprojection matrix
+    mat4.multiply(modelViewProjectionMatrix, perspectiveProjectionMatrix, modelViewMatrix);
+
+    // Now write this MVP to the uniform buffer 
+    queue.writeBuffer(buffer_mvpUniform_cube, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
+
+    renderPassEncoder.setVertexBuffer(0, buffer_position_cube);
+    //here color  is texture 
+    renderPassEncoder.setVertexBuffer(1, buffer_texcoord_cube);
+
+    renderPassEncoder.setBindGroup(0, bindingGroup_mvpUniform_cube);
+    renderPassEncoder.setBindGroup(1, bindingGroup_texutre_and_sampler_cube);
+    renderPassEncoder.draw(36);
+
+
+    //#endregion drawing ended for cube
+
 
     //end the render pass
     renderPassEncoder.end();
@@ -736,13 +1025,20 @@ function display() {
     const commandBuffer = commandEncoder.finish();
     queue.submit([commandBuffer]);
 
+    update();
+
 
     animationFrameId = requestAnimationFrame(display);
 
 }
 
 function update() {
-
+    angle_pyramid = angle_pyramid + 1.0;
+    angle_cube = angle_cube + 1.0;
+    if (angle_pyramid >= 360.0 && angle_cube >= 360.0) {
+        angle_pyramid = 0.0;
+        angle_cube = 0.0;
+    }
 }
 
 function uninitialize() {
@@ -754,9 +1050,14 @@ function uninitialize() {
     }
 
     //destroy texture
-    if (texture_smiley != null) {
-        texture_smiley.destroy();
-        texture_smiley = null;
+    if (texture_stone_pyramid != null) {
+        texture_stone_pyramid.destroy();
+        texture_stone_pyramid = null;
+    }
+
+    if (texture_kundali_cube != null) {
+        texture_kundali_cube.destroy();
+        texture_kundali_cube = null;
     }
 
     //destroy depth texure
@@ -773,13 +1074,21 @@ function uninitialize() {
         device.destroy();
         device = null;
         queue = null;
-        buffer_position = null;
-        buffer_texcoord = null;
+        buffer_position_pyramid = null;
+        buffer_texcoord_pyramid = null;
+
+        buffer_position_cube = null;
+        buffer_texcoord_cube = null;
         render_pipeline = null;
-        buffer_mvpUniform = null;
-        bindingGroup_mvpUniform = null;
-        sampler_smiley = null;
+        buffer_mvpUniform_cube = null;
+        buffer_mvpUniform_pyramid = null;
+        bindingGroup_mvpUniform_pyramid = null;
+        bindingGroup_mvpUniform_cube = null;
+
+        sampler_stone_pyramid = null;
+        sampler_kundali_cube = null;
         bindingGroup_texutre_and_sampler = null;
+        bindingGroup_texutre_and_sampler_cube = null;
 
     }
 
@@ -1030,4 +1339,8 @@ function createBindGroupForTextureAndSampler(
     }
     return bindGroup;
 
+}
+function degToRad(degrees) {
+    //code
+    return degrees * Math.PI / 180.0;
 }

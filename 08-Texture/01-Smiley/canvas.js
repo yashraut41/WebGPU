@@ -126,7 +126,7 @@ async function main(params) {
 }
 
 function onUncapturedError(event) {
-    console.error("WebGPU uncaptured error:", event.Error.message);
+    console.error("WebGPU uncaptured error:", event.error.message);
 }
 
 function onDeviceLost(info) {

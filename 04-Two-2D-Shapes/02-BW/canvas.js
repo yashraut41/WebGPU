@@ -117,7 +117,7 @@ async function main(params) {
 }
 
 function onUncapturedError(event) {
-    console.error("WebGPU uncaptured error:", event.Error.message);
+    console.error("WebGPU uncaptured error:", event.error.message);
 }
 
 function onDeviceLost(info) {
@@ -680,10 +680,6 @@ function display() {
     // 4. in modelViewProjection matrix from to read so we are saying from 0th  offset,
     // 5. how much data we want to write from source 
     queue.writeBuffer(buffer_mvpUniform_triangle, 0, modelViewProjectionMatrix, 0, modelViewProjectionMatrix.length);
-
-
-
-
 
     //d set vertex buffer
     // vertex buffer is the buffer that contains the vertex data for our scene.

@@ -233,6 +233,7 @@ async function initialize() {
 
     // B. Create  actual shader module. GPUShaderModule
     const shaderModule_vertexShader = device.createShaderModule(shaderModuleDescriptor_vertexShader);
+    await checkShaderCompilation(shaderModule_vertexShader, "Vertex shader");
 
     if (shaderModule_vertexShader == null) {
         console.log("Failed to create vertex shader module \n");
@@ -264,6 +265,7 @@ async function initialize() {
 
     // B. Create  actual shader module. GPUShaderModule
     const shaderModule_fragmentShader = device.createShaderModule(shaderModuleDescriptor_fragmentShader);
+    await checkShaderCompilation(shaderModule_fragmentShader, "Fragment shader");
 
     if (shaderModule_fragmentShader == null) {
         console.log("Failed to create Fragment shader module \n");
@@ -292,7 +294,7 @@ async function initialize() {
     const bufferDescriptor_position =
     {
         size: vertex_position.byteLength,
-        usage: GPUBufferUsage.VERTEX,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     };
 
     device.pushErrorScope('validation');
@@ -735,4 +737,24 @@ function keyDown(event) {
 function mousedown() {
     //code
     //do something here for mouse click
+}
+
+async function checkShaderCompilation(shaderModule, shaderName) {
+    const info = await shaderModule.getCompilationInfo();
+    let hasError = false;
+
+    for (const msg of info.messages) {
+        const text = `${shaderName} WGSL ${msg.type} at line ${msg.lineNum}:${msg.linePos} - ${msg.message}`;
+        if (msg.type === "error") {
+            console.error(text);
+            hasError = true;
+        } else {
+            console.warn(text);   // "warning" or "info"
+        }
+    }
+
+    if (hasError) {
+        throw Error(`${shaderName} failed to compile \n`);
+    }
+    console.log(`${shaderName} compiled successfully \n`);
 }
