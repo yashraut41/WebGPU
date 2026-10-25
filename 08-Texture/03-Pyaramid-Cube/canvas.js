@@ -347,29 +347,7 @@ async function initialize() {
     ]);
 
 
-    // Updated  in texture
-    const pyramid_vertex_texcoord = new Float32Array([
 
-
-        0.5, 1.0, // front-top
-        0.0, 0.0, // front-left
-        1.0, 0.0, // front-right
-
-        // right
-        0.5, 1.0, // right-top
-        1.0, 0.0, // right-left
-        0.0, 0.0, // right-right
-
-        // back
-        0.5, 1.0, // back-top
-        0.0, 0.0, // back-left
-        1.0, 0.0, // back-right
-
-        // left
-        0.5, 1.0, // left-top
-        1.0, 0.0, // left-left
-        0.0, 0.0, // left-right
-    ]);
 
     // 4.Create vertex buffer for postion. GPUBufferDescriptor
     // A. Create buffer descriptor
@@ -412,6 +390,29 @@ async function initialize() {
 
 
     //#region ======================= Texcoord buffer started pyramid ======================
+    // Updated  in texture
+    const pyramid_vertex_texcoord = new Float32Array([
+
+
+        0.5, 1.0, // front-top
+        0.0, 0.0, // front-left
+        1.0, 0.0, // front-right
+
+        // right
+        0.5, 1.0, // right-top
+        1.0, 0.0, // right-left
+        0.0, 0.0, // right-right
+
+        // back
+        0.5, 1.0, // back-top
+        0.0, 0.0, // back-left
+        1.0, 0.0, // back-right
+
+        // left
+        0.5, 1.0, // left-top
+        1.0, 0.0, // left-left
+        0.0, 0.0, // left-right
+    ]);
     // 4.Create vertex buffer for cOLOR. GPUBufferDescriptor
     // A. Create buffer descriptor
     const bufferDescriptor_texcoord_pyramid =
@@ -435,7 +436,7 @@ async function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_texcoord_pyramid, 0, pyramid_vertex_texcoord, 0, buffer_texcoord_pyramid.length);
+    queue.writeBuffer(buffer_texcoord_pyramid, 0, pyramid_vertex_texcoord, 0, pyramid_vertex_texcoord.length);
 
     console.log("Writing Vertex Texcoord data  into texcoord buffer is completed \n");
 
@@ -602,7 +603,7 @@ async function initialize() {
     }
 
 
-    queue.writeBuffer(buffer_texcoord_cube, 0, cube_vertex_texcoord, 0, buffer_texcoord_cube.length);
+    queue.writeBuffer(buffer_texcoord_cube, 0, cube_vertex_texcoord, 0, cube_vertex_texcoord.length);
 
     console.log("Writing Vertex Texcoord data  into texcoord buffer is completed for Cube \n");
 

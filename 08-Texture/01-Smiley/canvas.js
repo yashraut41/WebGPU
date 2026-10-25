@@ -369,7 +369,7 @@ async function initialize() {
 
     // four parameters are : destination buffer, destination offset, source data, source offset, source data length
 
-    queue.writeBuffer(buffer_texcoord, 0, vertex_texcoord, 0, buffer_texcoord.length);
+    queue.writeBuffer(buffer_texcoord, 0, vertex_texcoord, 0, vertex_texcoord.length);
 
     console.log("Writing Vertex Texcoord data  into texcoord buffer is completed \n");
 
